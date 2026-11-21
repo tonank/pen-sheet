@@ -2054,10 +2054,10 @@ const __mod_pen_input = (() => {
 const { h, rich } = __mod_dom;
 const { FIGURE_OMITTED } = __mod_guidance;
 const { browserStore, keptWrites, orderedStorage, saveLater } = __mod_saving;
-const { InkPad, tools } = __mod_ink;
+const { InkPad, fingersDraw, tools } = __mod_ink;
 const { watchDevice } = __mod_device;
 const { askClaude, configureTutor, expectsGrades, marksToPaper, normalizeGrades, pageRequest, parseReply, localAgent, reportProgress, tutorAvailable, tutorName, watchForNewQuiz, whenAgentAway } = __mod_tutor;
-const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #fffef9;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #fffef9, 0 0 4px #fffef9, 0 0 4px #fffef9, 0 0 4px #fffef9;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), #dbe4ee calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), #e2e8f0 calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), #e2e8f0 calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\npen-toolbar {\ndisplay: block;\nposition: sticky;\ntop: 0;\nz-index: 20;\nbackground: #fff;\nborder-bottom: 1px solid #000;\npadding: 0.4rem 0;\nmargin-bottom: 0.75rem;\n}\n.pen-bar {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nalign-items: center;\n}\n.pen-bar .pen-eink {\nmargin-left: auto;\n}\n.pen-has-toolbar pen-input .pen-tools .pen-pen,\n.pen-has-toolbar pen-input .pen-tools .pen-eraser,\n.pen-has-toolbar pen-input .pen-tools .pen-undo,\n.pen-has-toolbar pen-input .pen-tools .pen-redo {\ndisplay: none;\n}\n.pen-has-toolbar pen-input .pen-tools {\njustify-content: flex-end;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 44px;\nmin-width: 44px;\npadding: 0 0.7rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1rem 0;\n}\n.pen-feedback {\nmargin: 0.5rem 0 1rem;\npadding: 0.5rem 0.8rem;\nborder: 1px solid #000;\nborder-left-width: 4px;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback p {\nmargin: 0.3rem 0;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #fff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px));\n}";
+const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #fffef9;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #fffef9, 0 0 4px #fffef9, 0 0 4px #fffef9, 0 0 4px #fffef9;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), #dbe4ee calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), #e2e8f0 calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), #e2e8f0 calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\n.pen-sr {\nposition: absolute;\nwidth: 1px;\nheight: 1px;\noverflow: hidden;\nclip-path: inset(50%);\nwhite-space: nowrap;\n}\npen-toolbar {\nposition: fixed;\nright: 6px;\ntop: 50%;\ntransform: translateY(-50%);\nz-index: 30;\n}\n.pen-has-toolbar body {\npadding-right: 54px;\n}\n.pen-bar {\nposition: relative;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\npadding: 0.25rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-bar > button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0;\ndisplay: grid;\nplace-items: center;\nfont-size: 1rem;\nline-height: 1;\n}\n.pen-popover {\nposition: absolute;\nright: calc(100% + 8px);\nbottom: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nmin-width: 155px;\npadding: 0.35rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-popover[hidden] {\ndisplay: none;\n}\n.pen-popover button {\nmin-height: 36px;\npadding: 0 0.65rem;\ntext-align: left;\nfont-size: 0.9rem;\nwhite-space: nowrap;\n}\n.pen-has-toolbar pen-input .pen-tools {\ndisplay: none;\n}\n.pen-pad-btn {\nposition: absolute;\nright: 6px;\nz-index: 4;\nmin-width: 32px;\nmin-height: 32px;\npadding: 0 0.45rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.95rem;\nline-height: 1;\ncursor: pointer;\n}\n.pen-more-in {\nbottom: 6px;\nfont-weight: 700;\n}\n.pen-pin-in {\ntop: 6px;\nfont-size: 0.85rem;\n}\n.pen-pin-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\n.inkpad.readonly .pen-pad-btn {\ndisplay: none;\n}\n.pen-pinned {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 28;\ndisplay: flex;\nalign-items: flex-start;\ngap: 0.5rem;\npadding: 0.45rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-pinned-body {\nflex: 1;\nmin-width: 0;\nmax-height: 28vh;\noverflow-y: auto;\nfont-size: 0.95rem;\nline-height: 1.4;\n}\n.pen-pinned-body > :first-child {\nmargin-top: 0;\n}\n.pen-pinned-body > :last-child {\nmargin-bottom: 0;\n}\n.pen-unpin {\nflex: none;\nmin-width: 32px;\nmin-height: 32px;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1rem 0;\n}\n.pen-feedback {\nmargin: 0.5rem 0 1rem;\npadding: 0.5rem 0.8rem;\nborder: 1px solid #000;\nborder-left-width: 4px;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback p {\nmargin: 0.3rem 0;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #fff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px));\n}";
 const WORDS = {
 exportFailed: "Your handwriting could not be prepared for hand-in. Your work is still here: keep writing or try handing in again.",
 correct: "✓ Correct",
@@ -2076,6 +2076,13 @@ undo: "↶ Undo",
 redo: "↷ Redo",
 more: "+ More room",
 eInk: "◐ E-ink",
+settings: "Tools & settings",
+pin: "Pin task",
+unpin: "Unpin task",
+clear: "Clear",
+clearAsk: "Erase this whole answer?",
+fingerDraws: "☝ Finger draws",
+fingerScrolls: "☝ Finger scrolls",
 saved: "✓ Saved in this browser",
 savedWithPage: "✓ Saved with this page",
 unsaved: "⚠ This page can't keep your work here: hand in before you close it.",
@@ -2340,13 +2347,74 @@ document.body.append(h("p", { class: "pen-away", role: "status" }, `${who} isn't
 }
 });
 let activePad = null;
+let pinnedInput = null;
+let menuOpen = false;
 const currentPad = () => (activePad && !activePad.destroyed ? activePad : penInputs()[0]?.pad ?? null);
+function taskNodesFor(el) {
+const selector = el.getAttribute("task");
+if (selector) {
+const target = document.querySelector(selector);
+if (target) return [target];
+}
+const parent = el.parentElement;
+if (parent && parent !== document.body) {
+const before = [];
+for (const child of parent.children) {
+if (child === el) break;
+if (child.matches("pen-input, pen-toolbar, pen-submit, script, style, .pen-feedback")) continue;
+before.push(child);
+}
+if (before.length) return before;
+}
+let prev = el.previousElementSibling;
+while (prev && prev.matches("pen-input, pen-toolbar, pen-submit, script, style, .pen-feedback")) prev = prev.previousElementSibling;
+return prev ? [prev] : [];
+}
+function updatePinnedBar() {
+document.getElementById("pen-pinned-task")?.remove();
+for (const p of penInputs()) {
+const on = p === pinnedInput;
+p.pinBtn?.setAttribute("aria-pressed", String(on));
+p.pinBtn?.setAttribute("title", word(on ? "unpin" : "pin"));
+}
+if (!pinnedInput || !pinnedInput.isConnected) {
+pinnedInput = null;
+document.documentElement.style.scrollPaddingTop = "0px";
+return;
+}
+const nodes = taskNodesFor(pinnedInput);
+if (!nodes.length) {
+pinnedInput = null;
+return;
+}
+const content = h("div", { class: "pen-pinned-body" });
+for (const n of nodes) {
+const clone = n.cloneNode(true);
+clone.querySelectorAll?.("[id]").forEach((x) => x.removeAttribute("id"));
+content.append(clone);
+}
+const bar = h(
+"div",
+{ id: "pen-pinned-task", class: "pen-pinned", role: "region", "aria-label": word("pin") },
+content,
+h("button", { type: "button", class: "pen-unpin", title: word("unpin"), "aria-label": word("unpin"), onclick: () => ((pinnedInput = null), updatePinnedBar()) }, "✕"),
+);
+document.body.prepend(bar);
+document.documentElement.style.scrollPaddingTop = `${bar.offsetHeight}px`;
+}
+function togglePin(el) {
+pinnedInput = pinnedInput === el ? null : el;
+updatePinnedBar();
+}
 function refreshTools() {
 const hasShared = Boolean(document.querySelector("pen-toolbar"));
 document.documentElement.classList.toggle("pen-has-toolbar", hasShared);
 document.querySelectorAll("pen-input .pen-pen, pen-toolbar .pen-pen").forEach((b) => b.setAttribute("aria-pressed", String(tools.tool === "pen")));
 document.querySelectorAll("pen-input .pen-eraser, pen-toolbar .pen-eraser").forEach((b) => b.setAttribute("aria-pressed", String(tools.tool === "eraser")));
 document.querySelectorAll("pen-toolbar .pen-eink").forEach((b) => b.setAttribute("aria-pressed", String(calm())));
+document.querySelectorAll("pen-toolbar .pen-fingers").forEach((b) => (b.textContent = word(fingersDraw() ? "fingerDraws" : "fingerScrolls")));
+document.querySelectorAll("pen-toolbar .pen-cog").forEach((b) => b.setAttribute("aria-expanded", String(menuOpen)));
+document.querySelectorAll("pen-toolbar .pen-popover").forEach((p) => (p.hidden = !menuOpen));
 for (const p of penInputs()) {
 p.undoBtn.disabled = !p.pad.canUndo || p.pad.readOnly;
 p.redoBtn.disabled = !p.pad.canRedo || p.pad.readOnly;
@@ -2354,11 +2422,14 @@ p.redoBtn.disabled = !p.pad.canRedo || p.pad.readOnly;
 const pad = currentPad();
 document.querySelectorAll("pen-toolbar .pen-undo").forEach((b) => (b.disabled = !pad || !pad.canUndo || pad.readOnly));
 document.querySelectorAll("pen-toolbar .pen-redo").forEach((b) => (b.disabled = !pad || !pad.canRedo || pad.readOnly));
+document.querySelectorAll("pen-toolbar .pen-clear").forEach((b) => (b.disabled = !pad || pad.isEmpty || pad.readOnly));
 }
 class PenToolbarElement extends HTMLElement {
 connectedCallback() {
 if (this.querySelector(".pen-bar")) return;
-const button = (cls, text, onclick) => h("button", { type: "button", class: cls, onclick }, text);
+const iconBtn = (cls, icon, label, onclick) =>
+h("button", { type: "button", class: cls, title: label, "aria-label": label, onclick }, h("span", { "aria-hidden": "true" }, icon), h("span", { class: "pen-sr" }, label));
+const menuBtn = (cls, text, onclick) => h("button", { type: "button", class: cls, onclick }, text);
 const pick = (tool) => () => {
 tools.tool = tool;
 refreshTools();
@@ -2369,15 +2440,34 @@ document.documentElement.classList.toggle("hwq-eink", next);
 try { localStorage.setItem("pen:eink", next ? "1" : "0"); } catch {}
 refreshTools();
 };
+const toggleFingers = () => {
+tools.fingers = fingersDraw() ? "scroll" : "draw";
+refreshTools();
+};
+const clearPad = () => {
+const pad = currentPad();
+if (pad && !pad.readOnly && confirm(word("clearAsk"))) {
+pad.clear();
+menuOpen = false;
+refreshTools();
+}
+};
 this.replaceChildren(
 h(
 "div",
 { class: "pen-bar", role: "toolbar", "aria-label": "Notebook pen tools" },
-button("pen-pen", word("pen"), pick("pen")),
-button("pen-eraser", word("eraser"), pick("eraser")),
-button("pen-undo", word("undo"), () => (currentPad()?.undo(), refreshTools())),
-button("pen-redo", word("redo"), () => (currentPad()?.redo(), refreshTools())),
-button("pen-eink", word("eInk"), toggleEink),
+iconBtn("pen-pen", "✎", word("pen"), pick("pen")),
+iconBtn("pen-eraser", "⌫", word("eraser"), pick("eraser")),
+iconBtn("pen-undo", "↶", word("undo"), () => (currentPad()?.undo(), refreshTools())),
+iconBtn("pen-redo", "↷", word("redo"), () => (currentPad()?.redo(), refreshTools())),
+iconBtn("pen-cog", "⚙", word("settings"), () => ((menuOpen = !menuOpen), refreshTools())),
+h(
+"div",
+{ class: "pen-popover", hidden: !menuOpen },
+menuBtn("pen-eink", word("eInk"), toggleEink),
+menuBtn("pen-fingers", word(fingersDraw() ? "fingerDraws" : "fingerScrolls"), toggleFingers),
+menuBtn("pen-clear", word("clear"), clearPad),
+),
 ),
 );
 refreshTools();
@@ -2419,6 +2509,43 @@ refreshTools();
 };
 this.undoBtn = button("pen-undo", word("undo"), () => (this.pad.undo(), refreshTools()));
 this.redoBtn = button("pen-redo", word("redo"), () => (this.pad.redo(), refreshTools()));
+if (!figure) {
+this.pad.el.append(
+h(
+"button",
+{
+type: "button",
+class: "pen-pad-btn pen-more-in",
+title: word("more"),
+"aria-label": word("more"),
+onclick: (e) => {
+e.stopPropagation();
+activePad = this.pad;
+this.pad.addSpace();
+},
+},
+"+",
+),
+);
+}
+if (taskNodesFor(this).length) {
+this.pinBtn = h(
+"button",
+{
+type: "button",
+class: "pen-pad-btn pen-pin-in",
+title: word("pin"),
+"aria-label": word("pin"),
+"aria-pressed": String(pinnedInput === this),
+onclick: (e) => {
+e.stopPropagation();
+togglePin(this);
+},
+},
+"📌",
+);
+this.pad.el.append(this.pinBtn);
+}
 this.replaceChildren(
 h(
 "div",
@@ -2427,7 +2554,6 @@ button("pen-pen", word("pen"), pick("pen")),
 button("pen-eraser", word("eraser"), pick("eraser")),
 this.undoBtn,
 this.redoBtn,
-figure ? null : button("pen-more", word("more"), () => this.pad.addSpace()),
 ),
 this.pad.el,
 );
