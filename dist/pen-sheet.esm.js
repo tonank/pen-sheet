@@ -182,6 +182,7 @@ this.canvas = document.createElement("canvas");
 this.canvas.setAttribute("aria-label", "Handwriting area");
 this.predictCanvas = document.createElement("canvas");
 this.predictCanvas.className = "predict";
+this.predictCanvas.hidden = true;
 this.marksLayer = document.createElementNS(SVG_NS, "svg");
 this.marksLayer.setAttribute("class", "marks");
 this.marksLayer.setAttribute("aria-hidden", "true");
@@ -196,6 +197,7 @@ this.presenter = undefined;
 for (const type of ["pointerdown", "pointermove", "pointerup", "pointercancel", "lostpointercapture", "pointerleave"]) {
 this.canvas.addEventListener(type, this, { passive: false });
 }
+this.canvas.addEventListener("pointerrawupdate", this, { passive: true });
 this.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 this.resizeObserver = new ResizeObserver(() => this.el.clientWidth !== this.laidOutWidth && this.layout());
 this.resizeObserver.observe(this.el);
@@ -255,8 +257,10 @@ if (cssWidth === 0) return; // hidden page
 this.laidOutWidth = cssWidth;
 this.scale = cssWidth / PAPER_WIDTH;
 const cssHeight = Math.round(this.height * this.scale);
+const maxDpr = this.calm?.() ? 1.5 : Infinity;
 const dpr = Math.min(
 window.devicePixelRatio || 1,
+maxDpr,
 Math.sqrt(16e6 / (cssWidth * cssHeight)),
 8192 / cssHeight,
 );
@@ -274,6 +278,7 @@ ctx.setTransform(dpr * this.scale, 0, 0, dpr * this.scale, 0, 0);
 }
 this.marksLayer.setAttribute("viewBox", `0 0 ${PAPER_WIDTH} ${this.height}`);
 if (this.marks.length && this.marksHeight !== this.height) this.setMarks(this.marks);
+if (navigator.ink) this.#requestPresenter();
 this.redraw();
 }
 redraw() {
@@ -368,6 +373,8 @@ if (this.destroyed) return;
 switch (e.type) {
 case "pointerdown":
 return this.#down(e);
+case "pointerrawupdate":
+return this.#rawMove(e);
 case "pointermove":
 return this.#move(e);
 case "pointerup":
@@ -433,10 +440,11 @@ this.#eraseAt(this.active.last);
 } else {
 const p = this.#point(e);
 const stroke = { color: tools.color, size: tools.size, points: [p] };
-this.active = { pointerId: e.pointerId, pointerType: e.pointerType, kind: "draw", stroke, pressure: p[2], hasPressure: isPen, holdAt: p, line: false };
+this.active = { pointerId: e.pointerId, pointerType: e.pointerType, kind: "draw", stroke, pressure: p[2], hasPressure: isPen, holdAt: p, line: false, lastRawTime: -Infinity };
 this.strokes.push(stroke);
 drawStroke(this.ctx, stroke, 0, false);
 this.#requestPresenter();
+this.#delegateTrail(e, stroke);
 this.#armHold();
 }
 }
@@ -490,16 +498,36 @@ this.#drawLine(a);
 return;
 }
 const events = e.getCoalescedEvents?.() ?? [];
-const batchStart = a.kind === "draw" ? a.stroke.points.length : 0;
-const fast = Boolean(this.calm?.());
-for (const ev of events.length ? events : [e]) {
 if (a.kind === "erase") {
+for (const ev of events.length ? events : [e]) {
 const p = this.#point(ev);
 this.#eraseAlong(a.last, p);
 a.last = p;
-continue;
 }
+return;
+}
+const fast = Boolean(this.calm?.());
+this.#appendDrawEvents(a, events.length ? events : [e], fast, false);
+this.#drawPrediction(a.stroke, fast ? [] : (e.getPredictedEvents?.() ?? []));
+this.#delegateTrail(e, a.stroke);
+}
+#rawMove(e) {
+const a = this.active;
+if (!a || a.kind !== "draw" || a.line || a.pointerId !== e.pointerId) return;
+if (e.pointerType === "pen" && (!penContact(e) || erases(e))) return;
+const events = e.getCoalescedEvents?.() ?? [];
+const fast = Boolean(this.calm?.());
+this.#appendDrawEvents(a, events.length ? events : [e], fast, true);
+this.#delegateTrail(e, a.stroke);
+}
+#appendDrawEvents(a, events, fast, isRaw) {
 const pts = a.stroke.points;
+const batchStart = pts.length;
+let moved = false;
+for (const ev of events) {
+const ts = typeof ev.timeStamp === "number" ? ev.timeStamp : NaN;
+if (!isRaw && Number.isFinite(ts) && ts <= a.lastRawTime) continue;
+if (isRaw && Number.isFinite(ts) && ts > a.lastRawTime) a.lastRawTime = ts;
 const p = this.#point(ev);
 p[2] = round2(a.pressure * 0.6 + p[2] * 0.4);
 a.pressure = p[2];
@@ -509,14 +537,11 @@ pts.push(p);
 if (!fast) drawStroke(this.ctx, a.stroke, pts.length - 1, false);
 if (Math.hypot(p[0] - a.holdAt[0], p[1] - a.holdAt[1]) > HOLD_RADIUS) {
 a.holdAt = p;
-this.#armHold();
+moved = true;
 }
 }
-if (a.kind === "draw") {
-if (fast && a.stroke.points.length > batchStart) drawFastBatch(this.ctx, a.stroke, batchStart);
-this.#drawPrediction(a.stroke, fast ? [] : (e.getPredictedEvents?.() ?? []));
-this.#delegateTrail(e, a.stroke);
-}
+if (fast && pts.length > batchStart) drawFastBatch(this.ctx, a.stroke, batchStart);
+if (moved) this.#armHold();
 }
 #drawLine(a) {
 const { canvas, ctx } = this;
@@ -573,25 +598,33 @@ this.presenter = null;
 }
 }
 #drawPrediction(stroke, predicted) {
+if (!predicted.length) {
+if (!this.predictCanvas.hidden) this.#clearPrediction();
+return;
+}
 this.#clearPrediction();
-if (!predicted.length) return;
+this.predictCanvas.hidden = false;
 const last = stroke.points[stroke.points.length - 1];
 const ghost = { color: stroke.color, size: stroke.size, points: [last] };
 for (const ev of predicted) ghost.points.push([...this.#point(ev).slice(0, 2), last[2]]);
 drawStroke(this.predictCtx, ghost, 0, true);
 }
 #clearPrediction() {
+if (!this.predictCanvas.hidden) {
 const { predictCtx: ctx, predictCanvas: c } = this;
 ctx.save();
 ctx.setTransform(1, 0, 0, 1, 0, 0);
 ctx.clearRect(0, 0, c.width, c.height);
 ctx.restore();
+this.predictCanvas.hidden = true;
+}
 this.hoverAt = null;
 }
 #hover(e) {
 if (this.calm?.()) return;
 if (e.pointerType !== "pen" || this.readOnly || (e.buttons & 1) !== 0) return;
 this.#clearHover();
+this.predictCanvas.hidden = false;
 this.rect = this.canvas.getBoundingClientRect();
 const [x, y] = this.#point(e);
 const ctx = this.predictCtx;
@@ -624,6 +657,7 @@ if (!this.hoverAt) return;
 const [x, y, r] = this.hoverAt;
 this.predictCtx.clearRect(x - r, y - r, 2 * r, 2 * r);
 this.hoverAt = null;
+this.predictCanvas.hidden = true;
 }
 #up(e) {
 if (this.hoverPointer === e.pointerId) this.hoverPointer = null;
@@ -667,6 +701,7 @@ ctx.translate(0, a.dy);
 for (const s of a.moved) drawStroke(ctx, s, 0, true);
 ctx.restore();
 this.#clearPrediction();
+this.predictCanvas.hidden = false;
 const p = this.predictCtx;
 p.fillStyle = ROOM_BAND;
 p.fillRect(0, a.y0, PAPER_WIDTH, a.dy);
@@ -2022,7 +2057,7 @@ const { browserStore, keptWrites, orderedStorage, saveLater } = __mod_saving;
 const { InkPad, tools } = __mod_ink;
 const { watchDevice } = __mod_device;
 const { askClaude, configureTutor, expectsGrades, marksToPaper, normalizeGrades, pageRequest, parseReply, localAgent, reportProgress, tutorAvailable, tutorName, watchForNewQuiz, whenAgentAway } = __mod_tutor;
-const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\nbackground-color: #fffef9;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #fffef9, 0 0 4px #fffef9, 0 0 4px #fffef9, 0 0 4px #fffef9;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), #dbe4ee calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), #e2e8f0 calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), #e2e8f0 calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\npen-toolbar {\ndisplay: block;\nposition: sticky;\ntop: 0;\nz-index: 20;\nbackground: #fff;\nborder-bottom: 1px solid #000;\npadding: 0.4rem 0;\nmargin-bottom: 0.75rem;\n}\n.pen-bar {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nalign-items: center;\n}\n.pen-bar .pen-eink {\nmargin-left: auto;\n}\n.pen-has-toolbar pen-input .pen-tools .pen-pen,\n.pen-has-toolbar pen-input .pen-tools .pen-eraser,\n.pen-has-toolbar pen-input .pen-tools .pen-undo,\n.pen-has-toolbar pen-input .pen-tools .pen-redo {\ndisplay: none;\n}\n.pen-has-toolbar pen-input .pen-tools {\njustify-content: flex-end;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 44px;\nmin-width: 44px;\npadding: 0 0.7rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1rem 0;\n}\n.pen-feedback {\nmargin: 0.5rem 0 1rem;\npadding: 0.5rem 0.8rem;\nborder: 1px solid #000;\nborder-left-width: 4px;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback p {\nmargin: 0.3rem 0;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #fff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px));\n}";
+const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #fffef9;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #fffef9, 0 0 4px #fffef9, 0 0 4px #fffef9, 0 0 4px #fffef9;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), #dbe4ee calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), #e2e8f0 calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), #e2e8f0 calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\npen-toolbar {\ndisplay: block;\nposition: sticky;\ntop: 0;\nz-index: 20;\nbackground: #fff;\nborder-bottom: 1px solid #000;\npadding: 0.4rem 0;\nmargin-bottom: 0.75rem;\n}\n.pen-bar {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nalign-items: center;\n}\n.pen-bar .pen-eink {\nmargin-left: auto;\n}\n.pen-has-toolbar pen-input .pen-tools .pen-pen,\n.pen-has-toolbar pen-input .pen-tools .pen-eraser,\n.pen-has-toolbar pen-input .pen-tools .pen-undo,\n.pen-has-toolbar pen-input .pen-tools .pen-redo {\ndisplay: none;\n}\n.pen-has-toolbar pen-input .pen-tools {\njustify-content: flex-end;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 44px;\nmin-width: 44px;\npadding: 0 0.7rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1rem 0;\n}\n.pen-feedback {\nmargin: 0.5rem 0 1rem;\npadding: 0.5rem 0.8rem;\nborder: 1px solid #000;\nborder-left-width: 4px;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback p {\nmargin: 0.3rem 0;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #fff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px));\n}";
 const WORDS = {
 exportFailed: "Your handwriting could not be prepared for hand-in. Your work is still here: keep writing or try handing in again.",
 correct: "✓ Correct",
