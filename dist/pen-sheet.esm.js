@@ -2057,7 +2057,7 @@ const { browserStore, keptWrites, orderedStorage, saveLater } = __mod_saving;
 const { InkPad, fingersDraw, tools } = __mod_ink;
 const { watchDevice } = __mod_device;
 const { askClaude, configureTutor, expectsGrades, marksToPaper, normalizeGrades, pageRequest, parseReply, localAgent, reportProgress, tutorAvailable, tutorName, watchForNewQuiz, whenAgentAway } = __mod_tutor;
-const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #fffef9;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #fffef9, 0 0 4px #fffef9, 0 0 4px #fffef9, 0 0 4px #fffef9;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), #dbe4ee calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), #e2e8f0 calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), #e2e8f0 calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\n.pen-sr {\nposition: absolute;\nwidth: 1px;\nheight: 1px;\noverflow: hidden;\nclip-path: inset(50%);\nwhite-space: nowrap;\n}\npen-toolbar {\nposition: fixed;\nright: 6px;\ntop: 50%;\ntransform: translateY(-50%);\nz-index: 30;\n}\n.pen-has-toolbar body {\npadding-right: 54px;\n}\n.pen-bar {\nposition: relative;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\npadding: 0.25rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-bar > button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0;\ndisplay: grid;\nplace-items: center;\nfont-size: 1rem;\nline-height: 1;\n}\n.pen-popover {\nposition: absolute;\nright: calc(100% + 8px);\nbottom: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nmin-width: 155px;\npadding: 0.35rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-popover[hidden] {\ndisplay: none;\n}\n.pen-popover button {\nmin-height: 36px;\npadding: 0 0.65rem;\ntext-align: left;\nfont-size: 0.9rem;\nwhite-space: nowrap;\n}\n.pen-has-toolbar pen-input .pen-tools {\ndisplay: none;\n}\n.pen-pad-btn {\nposition: absolute;\nright: 6px;\nz-index: 4;\nmin-width: 32px;\nmin-height: 32px;\npadding: 0 0.45rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.95rem;\nline-height: 1;\ncursor: pointer;\n}\n.pen-more-in {\nbottom: 6px;\nfont-weight: 700;\n}\n.pen-pin-in {\ntop: 6px;\nfont-size: 0.85rem;\n}\n.pen-pin-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\n.inkpad.readonly .pen-pad-btn {\ndisplay: none;\n}\n.pen-pinned {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 28;\ndisplay: flex;\nalign-items: flex-start;\ngap: 0.5rem;\npadding: 0.45rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-pinned-body {\nflex: 1;\nmin-width: 0;\nmax-height: 28vh;\noverflow-y: auto;\nfont-size: 0.95rem;\nline-height: 1.4;\n}\n.pen-pinned-body > :first-child {\nmargin-top: 0;\n}\n.pen-pinned-body > :last-child {\nmargin-bottom: 0;\n}\n.pen-unpin {\nflex: none;\nmin-width: 32px;\nmin-height: 32px;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1rem 0;\n}\n.pen-feedback {\nmargin: 0.5rem 0 1rem;\npadding: 0.5rem 0.8rem;\nborder: 1px solid #000;\nborder-left-width: 4px;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback p {\nmargin: 0.3rem 0;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #fff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px));\n}";
+const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #fffef9;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #fffef9, 0 0 4px #fffef9, 0 0 4px #fffef9, 0 0 4px #fffef9;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), #dbe4ee calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), #e2e8f0 calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), #e2e8f0 calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\n.pen-sr {\nposition: absolute;\nwidth: 1px;\nheight: 1px;\noverflow: hidden;\nclip-path: inset(50%);\nwhite-space: nowrap;\n}\npen-toolbar {\nposition: fixed;\nright: 6px;\ntop: 50%;\ntransform: translateY(-50%);\nz-index: 30;\n}\n.pen-has-toolbar body {\npadding-right: 54px;\n}\n.pen-bar {\nposition: relative;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\npadding: 0.25rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-bar > button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0;\ndisplay: grid;\nplace-items: center;\nfont-size: 1rem;\nline-height: 1;\n}\n.pen-popover {\nposition: absolute;\nright: calc(100% + 8px);\nbottom: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nmin-width: 155px;\npadding: 0.35rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-popover[hidden] {\ndisplay: none;\n}\n.pen-popover button {\nmin-height: 36px;\npadding: 0 0.65rem;\ntext-align: left;\nfont-size: 0.9rem;\nwhite-space: nowrap;\n}\n.pen-has-toolbar pen-input .pen-tools {\ndisplay: none;\n}\n.pen-pad-btn {\nposition: absolute;\nright: 6px;\nz-index: 4;\nmin-width: 32px;\nmin-height: 32px;\npadding: 0 0.45rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.95rem;\nline-height: 1;\ncursor: pointer;\n}\n.pen-more-in {\nbottom: 6px;\nfont-weight: 700;\n}\n.pen-pin-in {\ntop: 6px;\nfont-size: 0.85rem;\n}\n.pen-pin-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\n.inkpad.readonly .pen-pad-btn {\ndisplay: none;\n}\n.pen-pinned {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 28;\ndisplay: flex;\nalign-items: flex-start;\ngap: 0.5rem;\npadding: 0.45rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-pinned-body {\nflex: 1;\nmin-width: 0;\nmax-height: 28vh;\noverflow-y: auto;\nfont-size: 0.95rem;\nline-height: 1.4;\n}\n.pen-pinned-body > :first-child {\nmargin-top: 0;\n}\n.pen-pinned-body > :last-child {\nmargin-bottom: 0;\n}\n.pen-unpin {\nflex: none;\nmin-width: 32px;\nmin-height: 32px;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1rem 0;\n}\n.pen-feedback {\nmargin: 0.5rem 0 1rem;\npadding: 0.5rem 0.8rem;\nborder: 1px solid #000;\nborder-left-width: 4px;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback p {\nmargin: 0.3rem 0;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #fff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), #8a8a8a calc(var(--line) - 1px));\n}\n.pen-sheet-card {\nmargin-top: 0.75rem;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-sheet-head {\ndisplay: flex;\nalign-items: baseline;\njustify-content: space-between;\ngap: 0.5rem;\nfont-size: 1.05rem;\n}\n.pen-sheet-count {\nfont-size: 0.85rem;\npadding: 0.15rem 0.5rem;\nborder: 1px solid #000;\nborder-radius: 999px;\n}\n.pen-sheet-msg {\nmargin: 0.4rem 0 0.65rem;\nfont-size: 0.92rem;\n}\n.pen-sheet-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nmargin-bottom: 0.6rem;\n}\n.pen-sheet-btn {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.75rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\ntext-decoration: none;\ncursor: pointer;\n}\n.pen-sheet-btn[hidden] {\ndisplay: none;\n}\n.pen-sheet-skipped {\nmargin: 0.25rem 0 0.6rem;\nfont-size: 0.88rem;\n}\n.pen-sheet-item {\nmargin: 0.7rem 0;\npadding-top: 0.5rem;\nborder-top: 1px solid #000;\n}\n.pen-sheet-item-head {\nfont-weight: 700;\nfont-size: 0.95rem;\nmargin-bottom: 0.3rem;\n}\n.pen-sheet-typed {\nmargin: 0.25rem 0 0.4rem;\nwhite-space: pre-wrap;\n}\n.pen-sheet-fig {\nmargin: 0.35rem 0 0;\n}\n.pen-sheet-fig img {\ndisplay: block;\nmax-width: 100%;\nborder: 1px solid #000;\nborder-radius: 6px;\n}\n.pen-sheet-details {\nmargin-top: 0.65rem;\n}\n.pen-sheet-details summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 32px;\n}\n@media print {\npen-toolbar,\n.pen-tools,\n.pen-pad-btn,\n.pen-pinned,\n.pen-sheet-actions,\n.pen-save,\npen-submit .pen-send {\ndisplay: none !important;\n}\n.pen-has-toolbar body {\npadding-right: 0 !important;\n}\n}";
 const WORDS = {
 exportFailed: "Your handwriting could not be prepared for hand-in. Your work is still here: keep writing or try handing in again.",
 correct: "✓ Correct",
@@ -2191,7 +2191,7 @@ document.querySelectorAll("pen-submit .pen-send").forEach((b) => (b.disabled = l
 }
 const statusBox = () => document.querySelector("pen-submit .pen-status");
 function status(...nodes) {
-statusBox()?.replaceChildren(...nodes);
+statusBox()?.replaceChildren(...nodes.filter((n) => n != null && n !== false));
 }
 function showFeedback() {
 document.querySelectorAll(".pen-feedback").forEach((el) => el.remove());
@@ -2284,14 +2284,184 @@ refreshTools();
 document.querySelectorAll("pen-submit .pen-send").forEach((b) => (b.hidden = false));
 save();
 }
+async function buildCombinedSheet(items) {
+const answered = items.filter((it) => it.inks.length || (it.typed && String(it.typed).trim()));
+if (!answered.length) return null;
+const W = 1200;
+const PAD = 36;
+const INNER = W - PAD * 2;
+const loadImg = (src) =>
+new Promise((resolve, reject) => {
+const img = new Image();
+img.onload = () => resolve(img);
+img.onerror = reject;
+img.src = src;
+});
+const loaded = [];
+for (const it of answered) {
+const imgs = [];
+for (const ink of it.inks) imgs.push({ ink, img: await loadImg(ink.png) });
+loaded.push({ ...it, imgs });
+}
+const measure = document.createElement("canvas").getContext("2d");
+const wrap = (text, font, maxW) => {
+measure.font = font;
+const out = [];
+for (const para of String(text).split(/\r?\n/)) {
+let line = "";
+for (const w of para.split(/\s+/)) {
+const test = line ? `${line} ${w}` : w;
+if (measure.measureText(test).width > maxW && line) {
+out.push(line);
+line = w;
+} else {
+line = test;
+}
+}
+if (line) out.push(line);
+}
+return out;
+};
+const titleLines = wrap(document.title || "Answer sheet", "bold 30px system-ui, sans-serif", INNER);
+const subLine = `${answered.length} of ${items.length} answered · ${new Date().toLocaleDateString()}`;
+const blocks = [];
+let y = PAD + titleLines.length * 38 + 34;
+for (const it of loaded) {
+const heading = it.label ? `${it.q.id} — ${it.label}` : it.q.id;
+const headLines = wrap(heading, "bold 22px system-ui, sans-serif", INNER);
+const typedLines = it.typed?.trim() ? wrap(it.typed.trim(), "20px system-ui, sans-serif", INNER) : [];
+const blockY = y;
+y += 18 + headLines.length * 28 + (typedLines.length ? typedLines.length * 26 + 10 : 0);
+const placedImgs = [];
+for (const { ink, img } of it.imgs) {
+const scale = Math.min(1, INNER / img.naturalWidth);
+const dw = Math.round(img.naturalWidth * scale);
+const dh = Math.round(img.naturalHeight * scale);
+placedImgs.push({ ink, img, y, dw, dh });
+y += dh + (ink.figureOmitted ? 28 : 16);
+}
+y += 16;
+blocks.push({ blockY, headLines, typedLines, placedImgs });
+}
+const H = Math.min(12000, y + PAD);
+const canvas = document.createElement("canvas");
+canvas.width = W;
+canvas.height = H;
+const ctx = canvas.getContext("2d");
+ctx.fillStyle = "#ffffff";
+ctx.fillRect(0, 0, W, H);
+ctx.fillStyle = "#000000";
+ctx.font = "bold 30px system-ui, sans-serif";
+let cy = PAD + 28;
+for (const line of titleLines) {
+ctx.fillText(line, PAD, cy);
+cy += 38;
+}
+ctx.fillStyle = "#444444";
+ctx.font = "18px system-ui, sans-serif";
+ctx.fillText(subLine, PAD, cy);
+for (const b of blocks) {
+ctx.strokeStyle = "#cccccc";
+ctx.lineWidth = 1;
+ctx.beginPath();
+ctx.moveTo(PAD, b.blockY);
+ctx.lineTo(W - PAD, b.blockY);
+ctx.stroke();
+let by = b.blockY + 32;
+ctx.fillStyle = "#000000";
+ctx.font = "bold 22px system-ui, sans-serif";
+for (const line of b.headLines) {
+ctx.fillText(line, PAD, by);
+by += 28;
+}
+if (b.typedLines.length) {
+ctx.font = "20px system-ui, sans-serif";
+for (const line of b.typedLines) {
+ctx.fillText(line, PAD, by);
+by += 26;
+}
+}
+for (const p of b.placedImgs) {
+ctx.strokeStyle = "#dddddd";
+ctx.strokeRect(PAD, p.y, p.dw, p.dh);
+ctx.drawImage(p.img, PAD, p.y, p.dw, p.dh);
+if (p.ink.figureOmitted) {
+ctx.fillStyle = "#555555";
+ctx.font = "italic 16px system-ui, sans-serif";
+ctx.fillText(FIGURE_OMITTED, PAD, p.y + p.dh + 20);
+}
+}
+}
+return canvas.toDataURL("image/png");
+}
 function showToPass(items, message) {
-status(
-h("p", {}, message),
-...items.flatMap(({ q, typed, inks }) => [
-typed ? h("p", {}, `${q.id}: ${typed}`) : null,
-...inks.map((ink) => h("figure", {}, h("figcaption", {}, `${q.id}${ink.figureOmitted ? `: ${FIGURE_OMITTED}` : ""}`), h("img", { src: ink.png, alt: `Handwriting: ${q.id}`, style: "max-width:100%" }))),
-]),
+const answered = items.filter((it) => it.inks.length || (it.typed && String(it.typed).trim()));
+const skipped = items.filter((it) => !answered.includes(it));
+const slug = (document.title || "answers").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "answers";
+const copyBtn = h("button", { type: "button", class: "pen-sheet-btn", disabled: true }, "📋 Copy answer sheet");
+const dlLink = h("a", { class: "pen-sheet-btn pen-sheet-link", download: `${slug}-answers.png`, hidden: true }, "⬇ Download PNG");
+const printBtn = h("button", { type: "button", class: "pen-sheet-btn", onclick: () => window.print() }, "🖨 Print / PDF");
+const combinedPreview = h("div", { class: "pen-sheet-combined" });
+const fieldsList = answered.map(({ q, label, typed, inks }) =>
+h(
+"div",
+{ class: "pen-sheet-item" },
+h("div", { class: "pen-sheet-item-head" }, label ? `${q.id} — ${label}` : q.id),
+typed?.trim() ? h("p", { class: "pen-sheet-typed" }, typed.trim()) : null,
+...inks.map((ink) =>
+h(
+"figure",
+{ class: "pen-sheet-fig" },
+ink.figureOmitted ? h("figcaption", {}, FIGURE_OMITTED) : null,
+h("img", { src: ink.png, alt: label || `Handwriting: ${q.id}` }),
+),
+),
+),
 );
+const card = h(
+"div",
+{ class: "pen-sheet-card" },
+h(
+"div",
+{ class: "pen-sheet-head" },
+h("strong", {}, "Answer sheet"),
+h("span", { class: "pen-sheet-count" }, `${answered.length} of ${items.length} answered`),
+),
+h("p", { class: "pen-sheet-msg" }, message),
+h("div", { class: "pen-sheet-actions" }, copyBtn, dlLink, printBtn),
+skipped.length
+? h("p", { class: "pen-sheet-skipped" }, `Unanswered: ${skipped.map((it) => it.label || it.q.id).join(", ")}`)
+: null,
+combinedPreview,
+h("details", { class: "pen-sheet-details", open: true }, h("summary", {}, "Individual answers"), ...fieldsList),
+);
+status(card);
+if (typeof Image === "function" && typeof document.createElement === "function") {
+buildCombinedSheet(items)
+.then((dataUrl) => {
+if (!dataUrl || !card.isConnected) return;
+dlLink.href = dataUrl;
+dlLink.hidden = false;
+copyBtn.disabled = false;
+copyBtn.onclick = async () => {
+try {
+const blob = await (await fetch(dataUrl)).blob();
+await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+copyBtn.textContent = "✓ Copied! Paste in any AI chat";
+} catch {
+dlLink.click();
+}
+};
+combinedPreview.replaceChildren(
+h("figure", { class: "pen-sheet-fig pen-sheet-merged" }, h("img", { src: dataUrl, alt: `${document.title || "Answer sheet"} — combined answers` })),
+);
+const det = card.querySelector(".pen-sheet-details");
+if (det) det.open = false;
+})
+.catch(() => {
+copyBtn.hidden = true;
+});
+}
 }
 async function handIn() {
 if (inputsLocked) return graded; // pending or already graded: do not start another request
@@ -2308,7 +2478,7 @@ return null;
 }
 const mine = ++run;
 if (!tutorAvailable("auto")) {
-showToPass(items, "Copy or long-press these images and send them to whoever made this page.");
+showToPass(items, "No grading server is connected to this page. Copy or download your answer sheet below and paste it into any AI chat (Claude, ChatGPT, Gemini) for teacher feedback.");
 return null;
 }
 lock(true);
