@@ -1,0 +1,55 @@
+{
+  "name": "pen-sheet",
+  "version": "0.1.0",
+  "description": "Zero-dependency e-ink & stylus worksheet Web Components (<pen-toolbar>, <pen-input>, <pen-submit>) with red-pen AI grading and dedicated server modes.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://tonank.github.io/pen-sheet/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tonank/pen-sheet.git"
+  },
+  "keywords": [
+    "stylus",
+    "handwriting",
+    "e-ink",
+    "boox",
+    "web-components",
+    "worksheet",
+    "quiz",
+    "ai-grading",
+    "agent-skill",
+    "ink"
+  ],
+  "main": "./dist/pen-sheet.js",
+  "module": "./dist/pen-sheet.esm.js",
+  "browser": "./dist/pen-sheet.js",
+  "jsdelivr": "./dist/pen-sheet.js",
+  "unpkg": "./dist/pen-sheet.js",
+  "types": "./dist/pen-sheet.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/pen-sheet.d.ts",
+      "import": "./dist/pen-sheet.esm.js",
+      "browser": "./dist/pen-sheet.js",
+      "default": "./dist/pen-sheet.js"
+    },
+    "./pen-sheet.js": "./dist/pen-sheet.js",
+    "./server": "./server/index.mjs",
+    "./skill": "./SKILL.md"
+  },
+  "bin": {
+    "pen-sheet": "./bin/pen-sheet.mjs"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "server",
+    "examples",
+    "SKILL.md",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}
