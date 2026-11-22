@@ -3250,10 +3250,26 @@ if (!customElements.get("pen-submit")) customElements.define("pen-submit", PenSu
 restoreControls(saved.typed);
 document.addEventListener("input", (e) => e.target.name && save());
 document.addEventListener("change", (e) => e.target.name && e.target.localName !== "pen-input" && save());
+document.addEventListener("keydown", onUndoRedoKey);
 if (saved.graded) {
 graded = saved.graded;
 showFeedback();
 }
+}
+function onUndoRedoKey(e) {
+if (e.defaultPrevented || e.isComposing || e.altKey || !(e.ctrlKey || e.metaKey)) return;
+const target = e.target;
+if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? "")) return;
+const key = String(e.key ?? "").toLowerCase();
+const isUndo = key === "z" && !e.shiftKey;
+const isRedo = (key === "z" && e.shiftKey) || (key === "y" && e.ctrlKey && !e.metaKey && !e.shiftKey);
+if (!isUndo && !isRedo) return;
+const pad = currentPad();
+if (!pad || pad.readOnly) return;
+e.preventDefault();
+if (isUndo) pad.undo();
+else pad.redo();
+refreshTools();
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
 else start();
