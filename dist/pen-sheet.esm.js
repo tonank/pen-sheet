@@ -1763,7 +1763,7 @@ const fileBlocks = files.flatMap((f, idx) => {
 const data = f.dataUrl.slice(f.dataUrl.indexOf(",") + 1);
 const isPdf = f.mediaType === "application/pdf";
 return [
-{ type: "text", text: `Uploaded Boox file ${idx + 1}: "${f.name}" (${f.mediaType})` },
+{ type: "text", text: `Uploaded file ${idx + 1}: "${f.name}" (${f.mediaType})` },
 isPdf
 ? { type: "document", source: { type: "base64", media_type: "application/pdf", data } }
 : { type: "image", source: { type: "base64", media_type: f.mediaType || "image/png", data } },
@@ -1773,7 +1773,7 @@ return [
 {
 type: "text",
 text: [
-`A student completed this worksheet natively on their Onyx Boox tablet (NeoReader / Notes) and uploaded the filled pages: "${title}".`,
+`A student completed this worksheet in a PDF or notes app and uploaded the filled pages: "${title}".`,
 `What the page asks:\n${quote(pageText)}`,
 `Fields on this page (each answer box in the PDF is tagged with [field id]):\n${items.map(({ q, label }) => `- "${q.id}"${label ? ` (${label})` : ""}`).join("\n")}`,
 "Read the student's handwriting from the attached PDF/images carefully. Transcribe each answer verbatim (mistakes included, [?] for anything illegible) before judging it.",
@@ -2234,7 +2234,7 @@ y += 42;
 }
 ctx.fillStyle = "#444444";
 const note =
-subtitle || "Write directly in Boox NeoReader or Notes (saved automatically in the PDF), then upload this file back on the page for teacher feedback.";
+subtitle || "Write in your preferred PDF or notes app, then upload the filled file back on the page for teacher feedback.";
 for (const line of wrapLines(ctx, note, "20px system-ui, sans-serif", INNER_W)) {
 ctx.fillText(line, MARGIN, y + 20);
 y += 28;
@@ -2364,9 +2364,9 @@ pin: "Pin task",
 unpin: "Unpin task",
 clear: "Clear",
 clearAsk: "Erase this whole answer?",
-booxPdf: "📄 Boox PDF",
-booxUpload: "📎 Grade Boox PDF / PNG",
-booxMaking: "Building Boox worksheet PDF…",
+booxPdf: "📄 Download PDF",
+booxUpload: "📎 Upload PDF / PNG",
+booxMaking: "Building worksheet PDF…",
 fingerDraws: "☝ Finger draws",
 fingerScrolls: "☝ Finger scrolls",
 saved: "✓ Saved in this browser",
@@ -3077,7 +3077,7 @@ const slug = (document.title || "worksheet").toLowerCase().replace(/[^a-z0-9]+/g
 const url = URL.createObjectURL(blob);
 const a = document.createElement("a");
 a.href = url;
-a.download = `${slug}-boox.pdf`;
+a.download = `${slug}-worksheet.pdf`;
 document.body.append(a);
 a.click();
 a.remove();
@@ -3086,13 +3086,13 @@ status(
 h(
 "p",
 { class: "pen-sheet-msg" },
-`Downloaded ${slug}-boox.pdf — open it in Boox NeoReader or Notes to write with native zero-latency ink, then tap “${word("booxUpload")}” to grade it.`,
+`Downloaded ${slug}-worksheet.pdf — write in your preferred PDF or notes app, then tap “${word("booxUpload")}” to grade it.`,
 ),
 );
 return blob;
 } catch (err) {
-console.warn("Boox PDF export failed:", err);
-status(h("p", { role: "alert" }, "Could not build the Boox PDF here. Use Print / Save as PDF instead."));
+console.warn("Worksheet PDF export failed:", err);
+status(h("p", { role: "alert" }, "Could not build the worksheet PDF here. Use Print / Save as PDF instead."));
 return null;
 }
 }
@@ -3139,8 +3139,8 @@ status(
 h(
 "div",
 { class: "pen-sheet-card" },
-h("div", { class: "pen-sheet-head" }, h("strong", {}, "Boox file ready for grading"), h("span", { class: "pen-sheet-count" }, `${files.length} file${files.length === 1 ? "" : "s"}`)),
-h("p", { class: "pen-sheet-msg" }, "No grading server is connected on this page. Attach your filled Boox file in Claude, Gemini, or ChatGPT and paste the grading prompt below for structured teacher feedback."),
+h("div", { class: "pen-sheet-head" }, h("strong", {}, "Uploaded work ready for grading"), h("span", { class: "pen-sheet-count" }, `${files.length} file${files.length === 1 ? "" : "s"}`)),
+h("p", { class: "pen-sheet-msg" }, "No grading server is connected on this page. Attach your filled file in Claude, Gemini, or ChatGPT and paste the grading prompt below for structured teacher feedback."),
 h("div", { class: "pen-sheet-actions" }, copyPromptBtn),
 ...files.map((f) =>
 f.mediaType.startsWith("image/")
@@ -3175,9 +3175,9 @@ save();
 return graded;
 } catch (err) {
 if (mine !== run) return null;
-console.warn("Grading uploaded Boox file failed:", err);
+console.warn("Grading uploaded file failed:", err);
 lock(false);
-status(h("p", { role: "alert" }, "Could not grade the uploaded Boox file right now. Try again, or paste the file into your AI chat."));
+status(h("p", { role: "alert" }, "Could not grade the uploaded file right now. Try again, or paste the file into your AI chat."));
 return null;
 }
 }
@@ -3202,8 +3202,8 @@ h(
 "div",
 { class: "pen-submit-row" },
 h("button", { type: "button", class: "pen-send", disabled: inputsLocked, hidden: Boolean(graded), onclick: handIn }, text),
-h("button", { type: "button", class: "pen-boox-btn", title: "Download A4 worksheet PDF for Onyx Boox NeoReader / Notes", onclick: downloadBooxPdf }, word("booxPdf")),
-h("button", { type: "button", class: "pen-boox-btn", title: "Upload your filled Boox NeoReader PDF or Notes PNGs for grading", onclick: () => fileInput.click() }, word("booxUpload")),
+h("button", { type: "button", class: "pen-boox-btn", title: "Download A4 worksheet PDF to write in your notes app", onclick: downloadBooxPdf }, word("booxPdf")),
+h("button", { type: "button", class: "pen-boox-btn", title: "Upload your filled PDF or PNG pages for grading", onclick: () => fileInput.click() }, word("booxUpload")),
 fileInput,
 ),
 h("div", { class: "pen-status" }),
