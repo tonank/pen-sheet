@@ -39,6 +39,7 @@ Or copy [SKILL.md](./SKILL.md) into `~/.claude/skills/pen-sheet/SKILL.md` (or `~
 - **HTTPS low-latency ink**: over HTTPS, automatically uses `navigator.ink` (Delegated Ink Trails) and full-rate `getCoalescedEvents()`.
 - **Palm rejection & pen ergonomics**: fingers scroll automatically once a stylus is seen; barrel button / eraser end erases; scribble-to-erase; draw-and-hold to straighten lines; auto-growing paper.
 - **Red-pen teacher markup**: SVG ticks, crosses, circles, underlines, and notes rendered directly on top of the student's handwriting.
+- **Native Boox NeoReader / Notes PDF round-trip**: tap **`📄 Boox PDF`** to generate a clean multi-page A4 worksheet PDF (100% pure JS, zero dependencies, full Unicode/SVG/grid/ruled support), write directly in Boox's native zero-latency **NeoReader** (which embeds your strokes back into the PDF automatically) or **Notes**, then tap **`📎 Grade Boox PDF / PNG`** to upload the filled file and grade it right on the page.
 - **Autosave & recovery**: strokes and typed inputs persist in `localStorage` (or Claude artifact storage) across reloads.
 
 ## Dedicated Server Modes

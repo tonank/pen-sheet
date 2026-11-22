@@ -44,8 +44,8 @@ export default {
 
     if (env.GEMINI_API_KEY) {
       const parts = blocks.map((b) =>
-        b.type === "image"
-          ? { inline_data: { mime_type: b.source?.media_type || "image/png", data: b.source?.data } }
+        b.type === "image" || b.type === "document"
+          ? { inline_data: { mime_type: b.source?.media_type || (b.type === "document" ? "application/pdf" : "image/png"), data: b.source?.data } }
           : { text: String(b.text ?? "") },
       );
       const model = env.MODEL || "gemini-2.5-flash";

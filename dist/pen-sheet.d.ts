@@ -62,6 +62,8 @@ export interface PenSheetAPI {
   canGrade(): boolean;
   handIn(): Promise<{ grades: Record<string, FieldGrade>; summary: string; marks: Record<string, unknown[]> } | null>;
   reopen(): void;
+  downloadBooxPdf(): Promise<Blob | null>;
+  gradeFiles(files: FileList | File[]): Promise<{ grades: Record<string, FieldGrade>; summary: string; marks: Record<string, unknown[]> } | null>;
   ask(prompt: string): Promise<string>;
   fields(): Array<{ q: { id: string; points: number }; label: string; typed?: string; inks: PenImage[] }>;
   InkPad: unknown;

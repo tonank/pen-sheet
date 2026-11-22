@@ -1758,6 +1758,41 @@ ${dispute ? "" : "- summary: two or three sentences: how it went and the one thi
 ];
 }
 pageRequest.images = (items) => items.flatMap(({ inks = [] }) => inkBlocks(inks));
+function documentPageRequest({ title, pageText, items, files, lang, feedbackLang }) {
+const fileBlocks = files.flatMap((f, idx) => {
+const data = f.dataUrl.slice(f.dataUrl.indexOf(",") + 1);
+const isPdf = f.mediaType === "application/pdf";
+return [
+{ type: "text", text: `Uploaded Boox file ${idx + 1}: "${f.name}" (${f.mediaType})` },
+isPdf
+? { type: "document", source: { type: "base64", media_type: "application/pdf", data } }
+: { type: "image", source: { type: "base64", media_type: f.mediaType || "image/png", data } },
+];
+});
+return [
+{
+type: "text",
+text: [
+`A student completed this worksheet natively on their Onyx Boox tablet (NeoReader / Notes) and uploaded the filled pages: "${title}".`,
+`What the page asks:\n${quote(pageText)}`,
+`Fields on this page (each answer box in the PDF is tagged with [field id]):\n${items.map(({ q, label }) => `- "${q.id}"${label ? ` (${label})` : ""}`).join("\n")}`,
+"Read the student's handwriting from the attached PDF/images carefully. Transcribe each answer verbatim (mistakes included, [?] for anything illegible) before judging it.",
+common(lang, feedbackLang),
+].join("\n\n"),
+},
+...fileBlocks,
+{
+type: "text",
+text: `Reply with only a JSON object:
+{"questions": [{"id": "<the field's name>", "readAs": "...", "verdict": "correct" | "partial" | "incorrect" | "blank", "comment": "...", "correctAnswer": "...", "nextTime": "..."}], "summary": "..."}
+One entry per field listed above.
+- readAs: your verbatim transcription of what the student wrote for that field ("" if blank).
+- comment: one or two specific, encouraging sentences about their work.
+- correctAnswer and nextTime: include for partial/incorrect answers.
+- summary: two or three sentences summarizing how it went and what to practise next.`,
+},
+];
+}
 function normalizeGrades(reply, questions) {
 const list = Array.isArray(reply?.questions)
 ? reply.questions
@@ -1820,7 +1855,7 @@ out.get(ink.id).push(mark);
 }
 return out;
 }
-return { DEFAULT_MODEL, VERDICTS, configureTutor, gradingEndpoint, localAgent, tutorName, tutorAvailable, whenAgentAway, watchForNewQuiz, expectsGrades, reportProgress, reportDevice, askClaude, parseReply, questionBlocks, gradeRequest, hintRequest, explainRequest, pageRequest, normalizeGrades, marksToPaper };
+return { DEFAULT_MODEL, VERDICTS, configureTutor, gradingEndpoint, localAgent, tutorName, tutorAvailable, whenAgentAway, watchForNewQuiz, expectsGrades, reportProgress, reportDevice, askClaude, parseReply, questionBlocks, gradeRequest, hintRequest, explainRequest, pageRequest, documentPageRequest, normalizeGrades, marksToPaper };
 })();
 const __mod_device = (() => {
 const { localAgent, reportDevice } = __mod_tutor;
@@ -2050,14 +2085,261 @@ timer = setTimeout(atEase, after);
 }
 return { browserStore, orderedStorage, keptWrites, saveLater };
 })();
+const __mod_pdf = (() => {
+const A4_PT_W = 595.28;
+const A4_PT_H = 841.89;
+const PAGE_W = 1240; // ~150 DPI A4 — crisp on Onyx Boox Note Air3 C and compact
+const PAGE_H = 1754;
+const MARGIN = 64;
+const INNER_W = PAGE_W - MARGIN * 2;
+const LINE_STEP = 44;
+function dataUrlToBytes(dataUrl) {
+const b64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+const bin = atob(b64);
+const bytes = new Uint8Array(bin.length);
+for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+return bytes;
+}
+function asciiBytes(str) {
+const out = new Uint8Array(str.length);
+for (let i = 0; i < str.length; i++) out[i] = str.charCodeAt(i) & 0xff;
+return out;
+}
+function buildPdfFromJpegs(pages) {
+if (!Array.isArray(pages) || !pages.length) throw new Error("At least one page is required");
+const chunks = [];
+let offset = 0;
+const push = (chunk) => {
+const bytes = typeof chunk === "string" ? asciiBytes(chunk) : chunk;
+chunks.push(bytes);
+offset += bytes.length;
+};
+push("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+const n = pages.length;
+const totalObjs = 2 + n * 3;
+const offsets = new Array(totalObjs + 1).fill(0);
+const startObj = (id) => {
+offsets[id] = offset;
+push(`${id} 0 obj\n`);
+};
+startObj(1);
+push("<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+const kids = pages.map((_, i) => `${5 + i * 3} 0 R`).join(" ");
+startObj(2);
+push(`<< /Type /Pages /Kids [${kids}] /Count ${n} >>\nendobj\n`);
+for (let i = 0; i < n; i++) {
+const { bytes, width, height } = pages[i];
+const imgId = 3 + i * 3;
+const contentId = 4 + i * 3;
+const pageId = 5 + i * 3;
+startObj(imgId);
+push(
+`<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${bytes.length} >>\nstream\n`,
+);
+push(bytes);
+push("\nendstream\nendobj\n");
+const streamStr = `q\n${A4_PT_W.toFixed(2)} 0 0 ${A4_PT_H.toFixed(2)} 0 0 cm\n/Im${i} Do\nQ\n`;
+startObj(contentId);
+push(`<< /Length ${streamStr.length} >>\nstream\n${streamStr}endstream\nendobj\n`);
+startObj(pageId);
+push(
+`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${A4_PT_W.toFixed(2)} ${A4_PT_H.toFixed(2)}] /Resources << /XObject << /Im${i} ${imgId} 0 R >> >> /Contents ${contentId} 0 R >>\nendobj\n`,
+);
+}
+const xrefOffset = offset;
+push(`xref\n0 ${totalObjs + 1}\n0000000000 65535 f \n`);
+for (let id = 1; id <= totalObjs; id++) {
+push(`${String(offsets[id]).padStart(10, "0")} 00000 n \n`);
+}
+push(`trailer\n<< /Size ${totalObjs + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
+const out = new Uint8Array(offset);
+let pos = 0;
+for (const c of chunks) {
+out.set(c, pos);
+pos += c.length;
+}
+return out;
+}
+function loadImage(src) {
+return new Promise((resolve, reject) => {
+const img = new Image();
+img.onload = () => resolve(img);
+img.onerror = reject;
+img.src = src;
+});
+}
+function wrapLines(ctx, text, font, maxW) {
+ctx.font = font;
+const out = [];
+for (const para of String(text ?? "").split(/\r?\n/)) {
+const trimmed = para.trim();
+if (!trimmed) {
+out.push("");
+continue;
+}
+let line = "";
+for (const word of trimmed.split(/\s+/)) {
+const next = line ? `${line} ${word}` : word;
+if (ctx.measureText(next).width > maxW && line) {
+out.push(line);
+line = word;
+} else {
+line = next;
+}
+}
+if (line) out.push(line);
+}
+return out;
+}
+function drawPaperBox(ctx, x, y, w, h, paper) {
+ctx.save();
+ctx.fillStyle = "#ffffff";
+ctx.fillRect(x, y, w, h);
+ctx.strokeStyle = "#b8bec8";
+ctx.lineWidth = 1;
+if (paper === "ruled" || paper === "grid") {
+ctx.beginPath();
+for (let gy = y + LINE_STEP; gy < y + h - 4; gy += LINE_STEP) {
+ctx.moveTo(x + 1, gy);
+ctx.lineTo(x + w - 1, gy);
+}
+if (paper === "grid") {
+for (let gx = x + LINE_STEP; gx < x + w - 4; gx += LINE_STEP) {
+ctx.moveTo(gx, y + 1);
+ctx.lineTo(gx, y + h - 1);
+}
+}
+ctx.stroke();
+}
+ctx.strokeStyle = "#222222";
+ctx.lineWidth = 2;
+ctx.strokeRect(x, y, w, h);
+ctx.restore();
+}
+async function exportWorksheetPdf({ title = "Stylus Worksheet", subtitle = "", fields = [] }) {
+const pages = [];
+const makePage = (pageNum) => {
+const canvas = document.createElement("canvas");
+canvas.width = PAGE_W;
+canvas.height = PAGE_H;
+const ctx = canvas.getContext("2d");
+ctx.fillStyle = "#ffffff";
+ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+let y = MARGIN;
+if (pageNum === 1) {
+ctx.fillStyle = "#000000";
+for (const line of wrapLines(ctx, title, "bold 34px system-ui, sans-serif", INNER_W)) {
+ctx.fillText(line, MARGIN, y + 30);
+y += 42;
+}
+ctx.fillStyle = "#444444";
+const note =
+subtitle || "Write directly in Boox NeoReader or Notes (saved automatically in the PDF), then upload this file back on the page for teacher feedback.";
+for (const line of wrapLines(ctx, note, "20px system-ui, sans-serif", INNER_W)) {
+ctx.fillText(line, MARGIN, y + 20);
+y += 28;
+}
+y += 14;
+ctx.strokeStyle = "#000000";
+ctx.lineWidth = 2;
+ctx.beginPath();
+ctx.moveTo(MARGIN, y);
+ctx.lineTo(PAGE_W - MARGIN, y);
+ctx.stroke();
+y += 26;
+} else {
+ctx.fillStyle = "#555555";
+ctx.font = "18px system-ui, sans-serif";
+ctx.fillText(`${title} — Page ${pageNum}`, MARGIN, y + 16);
+y += 38;
+}
+pages.push({ canvas, ctx, y, pageNum });
+return pages[pages.length - 1];
+};
+let cur = makePage(1);
+const bottomLimit = PAGE_H - MARGIN - 30;
+for (let i = 0; i < fields.length; i++) {
+const f = fields[i];
+const headText = f.heading || `${i + 1}. ${f.name}`;
+const headLines = wrapLines(cur.ctx, headText, "bold 24px system-ui, sans-serif", INNER_W);
+const promptLines = f.prompt ? wrapLines(cur.ctx, f.prompt, "21px system-ui, sans-serif", INNER_W) : [];
+let figImg = null;
+if (f.figureSvg) {
+try {
+figImg = await loadImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(f.figureSvg)}`);
+} catch {}
+}
+let inkImg = null;
+if (f.existingPng) {
+try {
+inkImg = await loadImage(f.existingPng);
+} catch {}
+}
+const headerH = headLines.length * 32 + (promptLines.length ? promptLines.length * 28 + 8 : 0) + 10;
+const rawBoxH = figImg
+? Math.max(320, Math.round((INNER_W * figImg.naturalHeight) / Math.max(1, figImg.naturalWidth)) + 80)
+: Math.max(300, Math.min(820, Math.round((Number(f.height) || 400) * 1.1)));
+const totalH = headerH + rawBoxH + 34;
+if (cur.y + totalH > bottomLimit && cur.y > MARGIN + 140) {
+cur = makePage(pages.length + 1);
+}
+const boxH = Math.min(rawBoxH, Math.max(240, bottomLimit - cur.y - headerH - 20));
+const { ctx } = cur;
+let y = cur.y;
+ctx.fillStyle = "#000000";
+ctx.font = "bold 24px system-ui, sans-serif";
+for (const line of headLines) {
+ctx.fillText(line, MARGIN, y + 24);
+y += 32;
+}
+if (promptLines.length) {
+ctx.fillStyle = "#111111";
+ctx.font = "21px system-ui, sans-serif";
+for (const line of promptLines) {
+if (line) ctx.fillText(line, MARGIN, y + 20);
+y += 28;
+}
+y += 6;
+}
+drawPaperBox(ctx, MARGIN, y, INNER_W, boxH, figImg ? "blank" : f.paper || "ruled");
+if (figImg) {
+const scale = Math.min((INNER_W - 24) / Math.max(1, figImg.naturalWidth), (boxH - 24) / Math.max(1, figImg.naturalHeight));
+const dw = Math.round(figImg.naturalWidth * scale);
+const dh = Math.round(figImg.naturalHeight * scale);
+ctx.drawImage(figImg, MARGIN + Math.round((INNER_W - dw) / 2), y + 12, dw, dh);
+} else if (inkImg) {
+const scale = Math.min((INNER_W - 16) / Math.max(1, inkImg.naturalWidth), (boxH - 16) / Math.max(1, inkImg.naturalHeight));
+ctx.drawImage(inkImg, MARGIN + 8, y + 8, Math.round(inkImg.naturalWidth * scale), Math.round(inkImg.naturalHeight * scale));
+}
+ctx.fillStyle = "#666666";
+ctx.font = "16px ui-monospace, monospace";
+ctx.fillText(`[${f.name}]`, MARGIN + 10, y + boxH - 10);
+cur.y = y + boxH + 34;
+}
+for (let p = 0; p < pages.length; p++) {
+const { ctx } = pages[p];
+ctx.fillStyle = "#666666";
+ctx.font = "16px system-ui, sans-serif";
+ctx.fillText(`Page ${p + 1} of ${pages.length} · pen-sheet`, MARGIN, PAGE_H - 28);
+}
+const jpegPages = pages.map(({ canvas }) => ({
+bytes: dataUrlToBytes(canvas.toDataURL("image/jpeg", 0.92)),
+width: canvas.width,
+height: canvas.height,
+}));
+return new Blob([buildPdfFromJpegs(jpegPages)], { type: "application/pdf" });
+}
+return { buildPdfFromJpegs, exportWorksheetPdf };
+})();
 const __mod_pen_input = (() => {
 const { h, rich } = __mod_dom;
 const { FIGURE_OMITTED } = __mod_guidance;
 const { browserStore, keptWrites, orderedStorage, saveLater } = __mod_saving;
 const { InkPad, fingersDraw, tools } = __mod_ink;
 const { watchDevice } = __mod_device;
-const { askClaude, configureTutor, expectsGrades, marksToPaper, normalizeGrades, pageRequest, parseReply, localAgent, reportProgress, tutorAvailable, tutorName, watchForNewQuiz, whenAgentAway } = __mod_tutor;
-const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #ffffff;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.28) calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad,\nhtml.pen-dark .inkpad {\nbackground-color: #17191e !important;\nborder-color: #323742 !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-ruled,\nhtml.pen-dark .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.12) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-grid,\nhtml.pen-dark .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad canvas,\nhtml[data-darkreader-scheme=\"dark\"] .inkpad .figure-bg,\nhtml.pen-dark .inkpad canvas,\nhtml.pen-dark .inkpad .figure-bg {\nfilter: invert(0.92) hue-rotate(180deg);\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks path,\nhtml.pen-dark .marks path {\nstroke: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks text,\nhtml.pen-dark .marks text {\nfill: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks .mark-note,\nhtml.pen-dark .marks .mark-note {\ncolor: #fca5a5;\ntext-shadow: 0 0 4px #17191e, 0 0 4px #17191e, 0 0 4px #17191e;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\n.pen-sr {\nposition: absolute;\nwidth: 1px;\nheight: 1px;\noverflow: hidden;\nclip-path: inset(50%);\nwhite-space: nowrap;\n}\npen-toolbar {\nposition: fixed;\nright: 6px;\ntop: 50%;\ntransform: translateY(-50%);\nz-index: 30;\n}\n.pen-has-toolbar body {\npadding-right: 54px;\n}\n.pen-bar {\nposition: relative;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\npadding: 0.25rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-bar > button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0;\ndisplay: grid;\nplace-items: center;\nfont-size: 1rem;\nline-height: 1;\n}\n.pen-popover {\nposition: absolute;\nright: calc(100% + 8px);\nbottom: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nmin-width: 155px;\npadding: 0.35rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-popover[hidden] {\ndisplay: none;\n}\n.pen-popover button {\nmin-height: 36px;\npadding: 0 0.65rem;\ntext-align: left;\nfont-size: 0.9rem;\nwhite-space: nowrap;\n}\n.pen-has-toolbar pen-input .pen-tools {\ndisplay: none;\n}\n.pen-pad-btn {\nposition: absolute;\nright: 6px;\nz-index: 4;\nmin-width: 32px;\nmin-height: 32px;\npadding: 0 0.45rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.95rem;\nline-height: 1;\ncursor: pointer;\n}\n.pen-more-in {\nbottom: 6px;\nfont-weight: 700;\n}\n.pen-pin-in {\ntop: 6px;\nfont-size: 0.85rem;\n}\n.pen-pin-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\n.inkpad.readonly .pen-pad-btn {\ndisplay: none;\n}\n.pen-pinned {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 28;\ndisplay: flex;\nalign-items: flex-start;\ngap: 0.5rem;\npadding: 0.45rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-pinned-body {\nflex: 1;\nmin-width: 0;\nmax-height: 28vh;\noverflow-y: auto;\nfont-size: 0.95rem;\nline-height: 1.4;\n}\n.pen-pinned-body > :first-child {\nmargin-top: 0;\n}\n.pen-pinned-body > :last-child {\nmargin-bottom: 0;\n}\n.pen-unpin {\nflex: none;\nmin-width: 32px;\nmin-height: 32px;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1rem 0;\n}\n.pen-feedback {\nmargin: 0.5rem 0 1rem;\npadding: 0.5rem 0.8rem;\nborder: 1px solid #000;\nborder-left-width: 4px;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback p {\nmargin: 0.3rem 0;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #ffffff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.35) calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px));\n}\nhtml.pen-dark body {\nbackground: #111317 !important;\ncolor: #e6e8ec !important;\n}\nhtml.pen-dark .pen-bar,\nhtml.pen-dark .pen-popover,\nhtml.pen-dark .pen-pinned,\nhtml.pen-dark .pen-feedback,\nhtml.pen-dark .pen-sheet-card,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar,\nhtml[data-darkreader-scheme=\"dark\"] .pen-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pinned {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-pad-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pad-btn {\nbackground: rgb(28 31 38 / 0.9) !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button,\nhtml.pen-dark .pen-unpin,\nhtml.pen-dark .pen-sheet-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button,\nhtml[data-darkreader-scheme=\"dark\"] .pen-unpin {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button[aria-pressed=\"true\"],\nhtml.pen-dark .pen-pin-in[aria-pressed=\"true\"],\nhtml.pen-dark pen-submit .pen-send,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-pin-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] pen-submit .pen-send {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n.pen-sheet-card {\nmargin-top: 0.75rem;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-sheet-head {\ndisplay: flex;\nalign-items: baseline;\njustify-content: space-between;\ngap: 0.5rem;\nfont-size: 1.05rem;\n}\n.pen-sheet-count {\nfont-size: 0.85rem;\npadding: 0.15rem 0.5rem;\nborder: 1px solid #000;\nborder-radius: 999px;\n}\n.pen-sheet-msg {\nmargin: 0.4rem 0 0.65rem;\nfont-size: 0.92rem;\n}\n.pen-sheet-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nmargin-bottom: 0.6rem;\n}\n.pen-sheet-btn {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.75rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\ntext-decoration: none;\ncursor: pointer;\n}\n.pen-sheet-btn[hidden] {\ndisplay: none;\n}\n.pen-sheet-skipped {\nmargin: 0.25rem 0 0.6rem;\nfont-size: 0.88rem;\n}\n.pen-sheet-item {\nmargin: 0.7rem 0;\npadding-top: 0.5rem;\nborder-top: 1px solid #000;\n}\n.pen-sheet-item-head {\nfont-weight: 700;\nfont-size: 0.95rem;\nmargin-bottom: 0.3rem;\n}\n.pen-sheet-typed {\nmargin: 0.25rem 0 0.4rem;\nwhite-space: pre-wrap;\n}\n.pen-sheet-fig {\nmargin: 0.35rem 0 0;\n}\n.pen-sheet-fig img {\ndisplay: block;\nmax-width: 100%;\nborder: 1px solid #000;\nborder-radius: 6px;\n}\n.pen-sheet-details {\nmargin-top: 0.65rem;\n}\n.pen-sheet-details summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 32px;\n}\n@media print {\npen-toolbar,\n.pen-tools,\n.pen-pad-btn,\n.pen-pinned,\n.pen-sheet-actions,\n.pen-save,\npen-submit .pen-send {\ndisplay: none !important;\n}\n.pen-has-toolbar body {\npadding-right: 0 !important;\n}\n}";
+const { exportWorksheetPdf } = __mod_pdf;
+const { askClaude, configureTutor, documentPageRequest, expectsGrades, marksToPaper, normalizeGrades, pageRequest, parseReply, localAgent, reportProgress, tutorAvailable, tutorName, watchForNewQuiz, whenAgentAway } = __mod_tutor;
+const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #ffffff;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.28) calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad,\nhtml.pen-dark .inkpad {\nbackground-color: #17191e !important;\nborder-color: #323742 !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-ruled,\nhtml.pen-dark .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.12) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-grid,\nhtml.pen-dark .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad canvas,\nhtml[data-darkreader-scheme=\"dark\"] .inkpad .figure-bg,\nhtml.pen-dark .inkpad canvas,\nhtml.pen-dark .inkpad .figure-bg {\nfilter: invert(0.92) hue-rotate(180deg);\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks path,\nhtml.pen-dark .marks path {\nstroke: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks text,\nhtml.pen-dark .marks text {\nfill: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks .mark-note,\nhtml.pen-dark .marks .mark-note {\ncolor: #fca5a5;\ntext-shadow: 0 0 4px #17191e, 0 0 4px #17191e, 0 0 4px #17191e;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\n.pen-sr {\nposition: absolute;\nwidth: 1px;\nheight: 1px;\noverflow: hidden;\nclip-path: inset(50%);\nwhite-space: nowrap;\n}\npen-toolbar {\nposition: fixed;\nright: 6px;\ntop: 50%;\ntransform: translateY(-50%);\nz-index: 30;\n}\n.pen-has-toolbar body {\npadding-right: 54px;\n}\n.pen-bar {\nposition: relative;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\npadding: 0.25rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-bar > button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0;\ndisplay: grid;\nplace-items: center;\nfont-size: 1rem;\nline-height: 1;\n}\n.pen-popover {\nposition: absolute;\nright: calc(100% + 8px);\nbottom: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nmin-width: 155px;\npadding: 0.35rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-popover[hidden] {\ndisplay: none;\n}\n.pen-popover button {\nmin-height: 36px;\npadding: 0 0.65rem;\ntext-align: left;\nfont-size: 0.9rem;\nwhite-space: nowrap;\n}\n.pen-has-toolbar pen-input .pen-tools {\ndisplay: none;\n}\n.pen-pad-btn {\nposition: absolute;\nright: 6px;\nz-index: 4;\nmin-width: 32px;\nmin-height: 32px;\npadding: 0 0.45rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.95rem;\nline-height: 1;\ncursor: pointer;\n}\n.pen-more-in {\nbottom: 6px;\nfont-weight: 700;\n}\n.pen-pin-in {\ntop: 6px;\nfont-size: 0.85rem;\n}\n.pen-pin-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\n.inkpad.readonly .pen-pad-btn {\ndisplay: none;\n}\n.pen-pinned {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 28;\ndisplay: flex;\nalign-items: flex-start;\ngap: 0.5rem;\npadding: 0.45rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-pinned-body {\nflex: 1;\nmin-width: 0;\nmax-height: 28vh;\noverflow-y: auto;\nfont-size: 0.95rem;\nline-height: 1.4;\n}\n.pen-pinned-body > :first-child {\nmargin-top: 0;\n}\n.pen-pinned-body > :last-child {\nmargin-bottom: 0;\n}\n.pen-unpin {\nflex: none;\nmin-width: 32px;\nmin-height: 32px;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1rem 0;\n}\n.pen-submit-row {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nalign-items: center;\n}\n.pen-boox-btn {\nfont-size: 0.9rem;\n}\n.pen-boox-file[hidden] {\ndisplay: none;\n}\n.pen-feedback {\nmargin: 0.5rem 0 1rem;\npadding: 0.5rem 0.8rem;\nborder: 1px solid #000;\nborder-left-width: 4px;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback p {\nmargin: 0.3rem 0;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #ffffff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.35) calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px));\n}\nhtml.pen-dark body {\nbackground: #111317 !important;\ncolor: #e6e8ec !important;\n}\nhtml.pen-dark .pen-bar,\nhtml.pen-dark .pen-popover,\nhtml.pen-dark .pen-pinned,\nhtml.pen-dark .pen-feedback,\nhtml.pen-dark .pen-sheet-card,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar,\nhtml[data-darkreader-scheme=\"dark\"] .pen-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pinned {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-pad-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pad-btn {\nbackground: rgb(28 31 38 / 0.9) !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button,\nhtml.pen-dark .pen-unpin,\nhtml.pen-dark .pen-sheet-btn,\nhtml.pen-dark .pen-boox-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button,\nhtml[data-darkreader-scheme=\"dark\"] .pen-unpin,\nhtml[data-darkreader-scheme=\"dark\"] .pen-boox-btn {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button[aria-pressed=\"true\"],\nhtml.pen-dark .pen-pin-in[aria-pressed=\"true\"],\nhtml.pen-dark pen-submit .pen-send,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-pin-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] pen-submit .pen-send {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n.pen-sheet-card {\nmargin-top: 0.75rem;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-sheet-head {\ndisplay: flex;\nalign-items: baseline;\njustify-content: space-between;\ngap: 0.5rem;\nfont-size: 1.05rem;\n}\n.pen-sheet-count {\nfont-size: 0.85rem;\npadding: 0.15rem 0.5rem;\nborder: 1px solid #000;\nborder-radius: 999px;\n}\n.pen-sheet-msg {\nmargin: 0.4rem 0 0.65rem;\nfont-size: 0.92rem;\n}\n.pen-sheet-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nmargin-bottom: 0.6rem;\n}\n.pen-sheet-btn {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.75rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\ntext-decoration: none;\ncursor: pointer;\n}\n.pen-sheet-btn[hidden] {\ndisplay: none;\n}\n.pen-sheet-skipped {\nmargin: 0.25rem 0 0.6rem;\nfont-size: 0.88rem;\n}\n.pen-sheet-item {\nmargin: 0.7rem 0;\npadding-top: 0.5rem;\nborder-top: 1px solid #000;\n}\n.pen-sheet-item-head {\nfont-weight: 700;\nfont-size: 0.95rem;\nmargin-bottom: 0.3rem;\n}\n.pen-sheet-typed {\nmargin: 0.25rem 0 0.4rem;\nwhite-space: pre-wrap;\n}\n.pen-sheet-fig {\nmargin: 0.35rem 0 0;\n}\n.pen-sheet-fig img {\ndisplay: block;\nmax-width: 100%;\nborder: 1px solid #000;\nborder-radius: 6px;\n}\n.pen-sheet-details {\nmargin-top: 0.65rem;\n}\n.pen-sheet-details summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 32px;\n}\n@media print {\npen-toolbar,\n.pen-tools,\n.pen-pad-btn,\n.pen-pinned,\n.pen-sheet-actions,\n.pen-save,\n.pen-boox-btn,\npen-submit .pen-send {\ndisplay: none !important;\n}\n.pen-has-toolbar body {\npadding-right: 0 !important;\n}\n}";
 const WORDS = {
 exportFailed: "Your handwriting could not be prepared for hand-in. Your work is still here: keep writing or try handing in again.",
 correct: "✓ Correct",
@@ -2082,6 +2364,9 @@ pin: "Pin task",
 unpin: "Unpin task",
 clear: "Clear",
 clearAsk: "Erase this whole answer?",
+booxPdf: "📄 Boox PDF",
+booxUpload: "📎 Grade Boox PDF / PNG",
+booxMaking: "Building Boox worksheet PDF…",
 fingerDraws: "☝ Finger draws",
 fingerScrolls: "☝ Finger scrolls",
 saved: "✓ Saved in this browser",
@@ -2650,6 +2935,7 @@ h(
 menuBtn("pen-eink", word("eInk"), toggleEink),
 menuBtn("pen-dark-btn", word("dark"), toggleDark),
 menuBtn("pen-fingers", word(fingersDraw() ? "fingerDraws" : "fingerScrolls"), toggleFingers),
+menuBtn("pen-boox-menu", word("booxPdf"), () => ((menuOpen = false), refreshTools(), downloadBooxPdf())),
 menuBtn("pen-clear", word("clear"), clearPad),
 ),
 ),
@@ -2763,17 +3049,174 @@ toPNG() {
 return this.pad?.toPNG() ?? null;
 }
 }
+async function downloadBooxPdf() {
+const pens = penInputs();
+if (!pens.length) return null;
+status(h("p", { class: "pen-thinking" }, word("booxMaking")));
+try {
+const pdfFields = pens.map((el, i) => {
+const nodes = taskNodesFor(el);
+const headingEl = nodes.find((n) => /^H[1-6]$/.test(n.tagName));
+const promptText = nodes
+.filter((n) => n !== headingEl)
+.map((n) => n.textContent?.trim())
+.filter(Boolean)
+.join("\n");
+return {
+name: el.name || `q${i + 1}`,
+heading: headingEl?.textContent?.trim() || el.getAttribute("label") || `${i + 1}. ${el.name || `q${i + 1}`}`,
+prompt: promptText,
+paper: el.getAttribute("paper") || (el.figureSource ? "blank" : "ruled"),
+height: Number(el.getAttribute("height")) || el.pad?.height || 400,
+figureSvg: el.figureSource || null,
+existingPng: !el.pad?.isEmpty ? el.pad.toPNG()?.png ?? null : null,
+};
+});
+const blob = await exportWorksheetPdf({ title: document.title || "Stylus Worksheet", fields: pdfFields });
+const slug = (document.title || "worksheet").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "worksheet";
+const url = URL.createObjectURL(blob);
+const a = document.createElement("a");
+a.href = url;
+a.download = `${slug}-boox.pdf`;
+document.body.append(a);
+a.click();
+a.remove();
+setTimeout(() => URL.revokeObjectURL(url), 10_000);
+status(
+h(
+"p",
+{ class: "pen-sheet-msg" },
+`Downloaded ${slug}-boox.pdf — open it in Boox NeoReader or Notes to write with native zero-latency ink, then tap “${word("booxUpload")}” to grade it.`,
+),
+);
+return blob;
+} catch (err) {
+console.warn("Boox PDF export failed:", err);
+status(h("p", { role: "alert" }, "Could not build the Boox PDF here. Use Print / Save as PDF instead."));
+return null;
+}
+}
+function readFileAsDataUrl(file) {
+return new Promise((resolve, reject) => {
+const reader = new FileReader();
+reader.onload = () => resolve(String(reader.result));
+reader.onerror = () => reject(reader.error || new Error("Could not read file"));
+reader.readAsDataURL(file);
+});
+}
+async function gradeFiles(fileList) {
+const raw = [...(fileList ?? [])].filter(Boolean);
+if (!raw.length) return null;
+const items = [
+...penInputs().map((p) => ({ q: { id: p.name, points: 1 }, label: labelOf(p), inks: [] })),
+...controlNames().map((name) => ({ q: { id: name, points: 1 }, label: labelOf(controls(name)[0]), typed: controlValue(name), inks: [] })),
+];
+const files = [];
+for (const f of raw) {
+const dataUrl = await readFileAsDataUrl(f);
+const mediaType = f.type || (/\.pdf$/i.test(f.name) ? "application/pdf" : /\.jpe?g$/i.test(f.name) ? "image/jpeg" : "image/png");
+files.push({ name: f.name, size: f.size, mediaType, dataUrl });
+}
+const meta = { title: document.title, pageText: pageText(), lang: pageLang(), feedbackLang: feedbackLang() };
+const request = documentPageRequest({ ...meta, items, files });
+if (!tutorAvailable("auto")) {
+const promptText = request.filter((b) => b.type === "text").map((b) => b.text).join("\n\n");
+const copyPromptBtn = h(
+"button",
+{
+type: "button",
+class: "pen-sheet-btn",
+onclick: async () => {
+try {
+await navigator.clipboard.writeText(promptText);
+copyPromptBtn.textContent = "✓ Grading prompt copied!";
+} catch {}
+},
+},
+"📋 Copy grading prompt",
+);
+status(
+h(
+"div",
+{ class: "pen-sheet-card" },
+h("div", { class: "pen-sheet-head" }, h("strong", {}, "Boox file ready for grading"), h("span", { class: "pen-sheet-count" }, `${files.length} file${files.length === 1 ? "" : "s"}`)),
+h("p", { class: "pen-sheet-msg" }, "No grading server is connected on this page. Attach your filled Boox file in Claude, Gemini, or ChatGPT and paste the grading prompt below for structured teacher feedback."),
+h("div", { class: "pen-sheet-actions" }, copyPromptBtn),
+...files.map((f) =>
+f.mediaType.startsWith("image/")
+? h("figure", { class: "pen-sheet-fig" }, h("figcaption", {}, f.name), h("img", { src: f.dataUrl, alt: f.name }))
+: h("p", { class: "pen-sheet-typed" }, `📄 ${f.name} (${Math.max(1, Math.round(f.size / 1024))} KB)`),
+),
+),
+);
+return null;
+}
+const mine = ++run;
+lock(true);
+status(h("p", { class: "pen-thinking" }, word("checking")));
+try {
+const submission = {
+...meta,
+items: items.map(({ q, label, typed }) => ({ id: q.id, label, typed })),
+files: files.map(({ name, mediaType, dataUrl }) => ({ name, mediaType, dataUrl })),
+};
+const reply = await askClaude(request, {
+maxTokens: Math.min(8000, 1500 + 400 * items.length),
+reuse: true,
+stillWanted: () => mine === run,
+expects: expectsGrades(items),
+submission,
+});
+if (mine !== run) return null;
+const { grades, summary } = normalizeGrades(parseReply(reply), items.map((it) => it.q));
+graded = { grades, summary, marks: {} };
+showFeedback();
+save();
+return graded;
+} catch (err) {
+if (mine !== run) return null;
+console.warn("Grading uploaded Boox file failed:", err);
+lock(false);
+status(h("p", { role: "alert" }, "Could not grade the uploaded Boox file right now. Try again, or paste the file into your AI chat."));
+return null;
+}
+}
 class PenSubmitElement extends HTMLElement {
 connectedCallback() {
 if (this.querySelector(".pen-send")) return;
 const text = this.textContent.trim() || "Hand in";
-this.replaceChildren(h("button", { type: "button", class: "pen-send", disabled: inputsLocked, hidden: Boolean(graded), onclick: handIn }, text), h("div", { class: "pen-status" }), h("p", { class: "pen-save", role: "status" }));
+const fileInput = h("input", {
+type: "file",
+class: "pen-boox-file",
+accept: "application/pdf,image/png,image/jpeg,image/webp",
+multiple: true,
+hidden: true,
+onchange: (e) => {
+const picked = e.target.files;
+if (picked?.length) gradeFiles(picked);
+e.target.value = "";
+},
+});
+this.replaceChildren(
+h(
+"div",
+{ class: "pen-submit-row" },
+h("button", { type: "button", class: "pen-send", disabled: inputsLocked, hidden: Boolean(graded), onclick: handIn }, text),
+h("button", { type: "button", class: "pen-boox-btn", title: "Download A4 worksheet PDF for Onyx Boox NeoReader / Notes", onclick: downloadBooxPdf }, word("booxPdf")),
+h("button", { type: "button", class: "pen-boox-btn", title: "Upload your filled Boox NeoReader PDF or Notes PNGs for grading", onclick: () => fileInput.click() }, word("booxUpload")),
+fileInput,
+),
+h("div", { class: "pen-status" }),
+h("p", { class: "pen-save", role: "status" }),
+);
 showSaveStatus();
 }
 }
 const PenSheet = {
 handIn,
 reopen,
+downloadBooxPdf,
+gradeFiles,
 configure: configureTutor,
 canGrade: () => tutorAvailable("auto"),
 ask: (text) => askClaude([{ type: "text", text }, ...pageRequest.images(fields())]),

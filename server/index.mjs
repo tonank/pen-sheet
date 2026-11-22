@@ -112,8 +112,8 @@ export async function gradeViaApi(payload, { provider, apiKey, model, answerKey 
 
   if (resolvedProvider === "gemini") {
     const parts = blocks.map((b) =>
-      b.type === "image"
-        ? { inline_data: { mime_type: b.source?.media_type || "image/png", data: b.source?.data } }
+      b.type === "image" || b.type === "document"
+        ? { inline_data: { mime_type: b.source?.media_type || (b.type === "document" ? "application/pdf" : "image/png"), data: b.source?.data } }
         : { text: String(b.text ?? "") },
     );
     const chosenModel = model || process.env.PEN_SHEET_MODEL || "gemini-2.5-flash";
@@ -158,16 +158,24 @@ function writeAgentRequest(inboxDir, payload) {
   const images = [];
   const blocks = Array.isArray(payload?.content) ? payload.content : [];
   let imgIndex = 0;
+  let docIndex = 0;
   const textParts = [];
   for (const b of blocks) {
     if (b?.type === "text" && typeof b.text === "string") {
       textParts.push(b.text);
     } else if (b?.type === "image" && b.source?.data) {
       imgIndex++;
-      const imgFile = join(inboxDir, `req-${id}-img-${imgIndex}.png`);
+      const ext = b.source.media_type === "image/jpeg" ? "jpg" : b.source.media_type === "image/webp" ? "webp" : "png";
+      const imgFile = join(inboxDir, `req-${id}-img-${imgIndex}.${ext}`);
       writeFileSync(imgFile, Buffer.from(b.source.data, "base64"));
       images.push(imgFile);
       textParts.push(`[Image ${imgIndex}: ${imgFile}]`);
+    } else if (b?.type === "document" && b.source?.data) {
+      docIndex++;
+      const docFile = join(inboxDir, `req-${id}-doc-${docIndex}.pdf`);
+      writeFileSync(docFile, Buffer.from(b.source.data, "base64"));
+      images.push(docFile);
+      textParts.push(`[Document ${docIndex}: ${docFile}]`);
     }
   }
   const reqFile = join(inboxDir, `req-${id}.json`);
