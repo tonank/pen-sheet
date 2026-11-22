@@ -1542,7 +1542,19 @@ method: "POST",
 headers: { "content-type": "application/json" },
 body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: "user", content }] }),
 });
-if (!res.ok) throw new Error(`Claude API error ${res.status}`);
+if (!res.ok) {
+let detail = "";
+try {
+const raw = await res.text();
+try {
+detail = JSON.parse(raw)?.error?.message || raw;
+} catch {
+detail = raw;
+}
+} catch {}
+detail = String(detail).replace(/\s+/g, " ").trim().slice(0, 140);
+throw new Error(`Claude API error ${res.status}${detail ? `: ${detail}` : ""}`);
+}
 const data = await res.json();
 const text = (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("");
 if (!text) throw new Error("Empty reply from Claude");
@@ -1554,21 +1566,90 @@ return window.claude.complete(content.map((b) => b.text).join("\n\n"));
 throw err;
 }
 }
+function repairJsonStrings(raw) {
+let out = "";
+let inString = false;
+for (let i = 0; i < raw.length; i++) {
+const c = raw[i];
+if (!inString) {
+if (c === '"') inString = true;
+out += c;
+continue;
+}
+if (c === '"') {
+inString = false;
+out += c;
+} else if (c === "\\") {
+const next = raw[i + 1];
+if (next === undefined) {
+out += "\\\\";
+} else if ('"\\/bfnrt'.includes(next) || (next === "u" && /^[0-9a-fA-F]{4}/.test(raw.slice(i + 2, i + 6)))) {
+out += "\\" + next;
+i++;
+} else {
+out += "\\\\" + next;
+i++;
+}
+} else if (c === "\n") {
+out += "\\n";
+} else if (c === "\r") {
+out += "\\r";
+} else {
+out += c;
+}
+}
+return out;
+}
+function tryParseObject(raw) {
+try {
+return JSON.parse(raw);
+} catch {
+try {
+return JSON.parse(repairJsonStrings(raw));
+} catch {
+return null;
+}
+}
+}
 function parseReply(text) {
-const start = text.indexOf("{");
-if (start < 0) throw new Error("No JSON in Claude's reply");
+const s = String(text ?? "");
+const candidates = [];
+for (const m of s.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) {
+const inner = m[1].trim();
+if (inner.startsWith("{")) candidates.push(inner);
+}
+let sawOpen = false;
+let sawBalanced = false;
+for (let start = s.indexOf("{"); start >= 0; start = s.indexOf("{", start + 1)) {
+sawOpen = true;
 let depth = 0;
 let inString = false;
-for (let i = start; i < text.length; i++) {
-const c = text[i];
+for (let i = start; i < s.length; i++) {
+const c = s[i];
 if (inString) {
 if (c === "\\") i++;
 else if (c === '"') inString = false;
 } else if (c === '"') inString = true;
 else if (c === "{") depth++;
-else if (c === "}" && --depth === 0) return JSON.parse(text.slice(start, i + 1));
+else if (c === "}" && --depth === 0) {
+sawBalanced = true;
+candidates.push(s.slice(start, i + 1));
+start = i;
+break;
 }
-throw new Error("Claude's reply was cut off");
+}
+}
+let firstParsed = null;
+for (const raw of candidates) {
+const parsed = tryParseObject(raw);
+if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+if ("questions" in parsed || "grades" in parsed || "hint" in parsed || "reply" in parsed || "summary" in parsed) return parsed;
+firstParsed ??= parsed;
+}
+if (firstParsed) return firstParsed;
+if (!sawOpen) throw new Error("No JSON in Claude's reply");
+if (!sawBalanced) throw new Error("Claude's reply was cut off");
+throw new Error("Could not parse JSON in Claude's reply");
 }
 const MARKS_HELP = `"marks" (optional) are red-pen marks on a handwriting image: {"image": "<image id>", "kind": "tick" | "cross" | "circle" | "underline" | "question", "x", "y", "w", "h": the marked area as fractions from 0 to 1 of that image's width and height, "note": at most 4 words, optional}. Put them on the exact step that went wrong, or tick good work. At most 3 per image.`;
 function inkBlocks(inks) {
@@ -2776,7 +2857,7 @@ try {
 const meta = { title: document.title, pageText: pageText(), lang: pageLang(), feedbackLang: feedbackLang() };
 const request = pageRequest({ ...meta, items });
 const submission = { ...meta, items: items.map(({ q, label, typed, inks }) => ({ id: q.id, label, typed, images: inks })) };
-const reply = await askClaude(request, { maxTokens: Math.min(8000, 1500 + 400 * items.length), reuse: true, stillWanted: () => mine === run, expects: expectsGrades(items), submission });
+const reply = await askClaude(request, { maxTokens: Math.min(12000, 2500 + 700 * items.length), reuse: true, stillWanted: () => mine === run, expects: expectsGrades(items), submission });
 if (mine !== run) return null;
 const { grades, summary } = normalizeGrades(parseReply(reply), items.map((it) => it.q));
 const marks = {};
@@ -2791,7 +2872,8 @@ return graded;
 if (mine !== run) return null;
 console.warn("Handing in failed:", err);
 lock(false);
-showToPass(items, "It couldn't be checked from here. Try again, or send these to whoever made this page.");
+const reason = err?.message ? ` (${String(err.message).slice(0, 160)})` : "";
+showToPass(items, `It couldn't be checked from here${reason}. Try again, or send these to whoever made this page.`);
 statusBox()?.prepend(h("button", { type: "button", onclick: handIn }, word("retry")));
 return null;
 }
@@ -3164,7 +3246,7 @@ items: items.map(({ q, label, typed }) => ({ id: q.id, label, typed })),
 files: files.map(({ name, mediaType, dataUrl }) => ({ name, mediaType, dataUrl })),
 };
 const reply = await askClaude(request, {
-maxTokens: Math.min(8000, 1500 + 400 * items.length),
+maxTokens: Math.min(12000, 2500 + 700 * items.length),
 reuse: true,
 stillWanted: () => mine === run,
 expects: expectsGrades(items),
@@ -3180,7 +3262,8 @@ return graded;
 if (mine !== run) return null;
 console.warn("Grading uploaded file failed:", err);
 lock(false);
-status(h("p", { role: "alert" }, "Could not grade the uploaded file right now. Try again, or paste the file into your AI chat."));
+const reason = err?.message ? ` (${String(err.message).slice(0, 160)})` : "";
+status(h("p", { role: "alert" }, `Could not grade the uploaded file right now${reason}. Try again, or paste the file into your AI chat.`));
 return null;
 }
 }
