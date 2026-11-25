@@ -56,12 +56,17 @@ Before writing HTML, design prompts where **handwriting pays off**:
 
 ### Component attributes
 
+- **`<pen-toolbar>`**:
+  - Compact floating right-side rail with live **Question Navigator** (`2/6` jump list + flag & verdict indicators), Pen / Eraser / Undo / Redo, and `⚙` menu (ink colors & nib sizes, optional exam timer, E-ink, Dark mode, Finger-scroll, Download PDF, Copy for AI, Grader setup, Clear).
+  - `timer`: optional exam countdown in minutes (e.g. `<pen-toolbar timer="30">` pre-loads a 30:00 countdown; omit for an optional count-up stopwatch).
 - **`<pen-input>`**:
   - `name` (required): stable id used for autosave, PDF box tagging, and grading.
-  - `label`: human-readable title shown on Answer Sheets and sent to the grader.
+  - `label`: human-readable title shown in the Question Navigator, Answer Sheets, and sent to the grader.
+  - `points`: optional point weight (e.g. `points="4"` displays a crisp `4 pts` pill and passes points to the grader).
   - `paper`: `"ruled"` (default), `"grid"`, or `"blank"`.
   - `height`: paper height in units (width is always `1000`; `360`–`550` is comfortable and auto-grows as you write near the bottom).
   - An inline `<svg viewBox="...">` inside `<pen-input>` becomes the drawable diagram background.
+  - Built-in corner actions: **`⚑` Flag for review** (persisted across reloads and surfaced in the Question Navigator + readiness pill), **`📌` Pin task**, and **`+` More room**.
 - **`<pen-submit>`**:
   - `mode`: `"coach"` (**default** — open educational coaching with rich Markdown, custom badges, collapsible `nudge` & `solution`, and follow-up tutor chat), `"free"` (pure narrative Markdown teacher letter), or `"strict"` (classic 4-verdict `correct | partial | incorrect | blank` scoring).
   - `prompt`: optional per-worksheet pedagogy or rubric instructions (e.g. `prompt="Use Socratic hints first; never reveal the final formula unless the student is completely stuck."`).
