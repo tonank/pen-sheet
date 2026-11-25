@@ -1288,6 +1288,120 @@ return esc(s)
 .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>")
 .replace(/\n/g, "<br>");
 }
+function inlineWithMath(s, renderTex) {
+let out = "";
+let last = 0;
+for (const m of s.matchAll(/\$([^$\n]+?)\$/g)) {
+out += inline(s.slice(last, m.index));
+out += `<span class="hwq-math">${renderTex(m[1])}</span>`;
+last = m.index + m[0].length;
+}
+out += inline(s.slice(last));
+return out;
+}
+function markdownToHtml(text, renderTex = esc) {
+let src = String(text ?? "").replace(/\r\n?/g, "\n").replaceAll("\\$", DOLLAR);
+const blocks = [];
+const stash = (html) => {
+const idx = blocks.length;
+blocks.push(html);
+return `\n\uE001${idx}\uE001\n`;
+};
+src = src.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (_, lang, code) =>
+stash(`<pre class="pen-code"${lang ? ` data-lang="${esc(lang)}"` : ""}><code>${esc(code.replace(/\n$/, ""))}</code></pre>`),
+);
+src = src.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => stash(`<div class="hwq-math-block">${renderTex(tex)}</div>`));
+const lines = src.split("\n");
+const out = [];
+let i = 0;
+const isTableSep = (line) => /^\s*\|?[\s:-]+\|[\s|:-]*$/.test(line) && line.includes("-");
+const splitCells = (line) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+while (i < lines.length) {
+const line = lines[i];
+const trimmed = line.trim();
+if (!trimmed) {
+i++;
+continue;
+}
+const ph = /^\uE001(\d+)\uE001$/.exec(trimmed);
+if (ph) {
+out.push(blocks[Number(ph[1])]);
+i++;
+continue;
+}
+if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+out.push("<hr>");
+i++;
+continue;
+}
+const hMatch = /^(#{1,4})\s+(.+)$/.exec(trimmed);
+if (hMatch) {
+const level = Math.min(6, hMatch[1].length + 2);
+out.push(`<h${level} class="pen-md-h">${inlineWithMath(hMatch[2], renderTex)}</h${level}>`);
+i++;
+continue;
+}
+if (/^>\s?/.test(trimmed)) {
+const qLines = [];
+while (i < lines.length && /^>\s?/.test(lines[i].trim())) {
+qLines.push(lines[i].trim().replace(/^>\s?/, ""));
+i++;
+}
+out.push(`<blockquote>${inlineWithMath(qLines.join("\n"), renderTex)}</blockquote>`);
+continue;
+}
+if (trimmed.includes("|") && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+const headers = splitCells(lines[i]);
+i += 2;
+const rows = [];
+while (i < lines.length && lines[i].trim().includes("|") && !/^\s*$/.test(lines[i])) {
+rows.push(splitCells(lines[i]));
+i++;
+}
+const thead = `<thead><tr>${headers.map((c) => `<th>${inlineWithMath(c, renderTex)}</th>`).join("")}</tr></thead>`;
+const tbody = rows.length
+? `<tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${inlineWithMath(c, renderTex)}</td>`).join("")}</tr>`).join("")}</tbody>`
+: "";
+out.push(`<div class="pen-table-wrap"><table>${thead}${tbody}</table></div>`);
+continue;
+}
+if (/^\s*[-*•]\s+/.test(line)) {
+const items = [];
+while (i < lines.length && /^\s*[-*•]\s+/.test(lines[i])) {
+items.push(lines[i].replace(/^\s*[-*•]\s+/, ""));
+i++;
+}
+out.push(`<ul>${items.map((it) => `<li>${inlineWithMath(it, renderTex)}</li>`).join("")}</ul>`);
+continue;
+}
+if (/^\s*\d+[.)]\s+/.test(line)) {
+const items = [];
+while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
+items.push(lines[i].replace(/^\s*\d+[.)]\s+/, ""));
+i++;
+}
+out.push(`<ol>${items.map((it) => `<li>${inlineWithMath(it, renderTex)}</li>`).join("")}</ol>`);
+continue;
+}
+const para = [];
+while (
+i < lines.length &&
+lines[i].trim() &&
+!/^\uE001(\d+)\uE001$/.test(lines[i].trim()) &&
+!/^(#{1,4})\s+/.test(lines[i].trim()) &&
+!/^>\s?/.test(lines[i].trim()) &&
+!/^\s*[-*•]\s+/.test(lines[i]) &&
+!/^\s*\d+[.)]\s+/.test(lines[i]) &&
+!/^(-{3,}|\*{3,}|_{3,})$/.test(lines[i].trim()) &&
+!(lines[i].includes("|") && i + 1 < lines.length && isTableSep(lines[i + 1]))
+) {
+para.push(lines[i]);
+i++;
+}
+out.push(`<p>${inlineWithMath(para.join("\n"), renderTex)}</p>`);
+}
+return out.join("").replaceAll(DOLLAR, "$");
+}
 const SUPERSCRIPT = { 0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹", n: "ⁿ", "-": "⁻", "+": "⁺" };
 function plain(text) {
 const brace = String.raw`\{((?:[^{}]|\{[^{}]*\})*)\}`;
@@ -1312,11 +1426,11 @@ return s
 })
 .replaceAll(DOLLAR, "$");
 }
-return { DOLLAR, inline, SUPERSCRIPT, plain };
+return { DOLLAR, inline, markdownToHtml, SUPERSCRIPT, plain };
 })();
 const __mod_dom = (() => {
 const { texToHtml } = __mod_tex;
-const { DOLLAR, inline } = __mod_text;
+const { DOLLAR, inline, markdownToHtml } = __mod_text;
 function h(tag, props = {}, ...children) {
 const el = document.createElement(tag);
 for (const [k, v] of Object.entries(props)) {
@@ -1353,7 +1467,10 @@ last = m.index + m[0].length;
 html += inline(src.slice(last));
 return h("div", { class: cls, lang: textLang, html: html.replaceAll(DOLLAR, "$") });
 }
-return { h, toast, setTextLang, rich };
+function richMarkdown(text, cls = "pen-md") {
+return h("div", { class: cls, lang: textLang, html: markdownToHtml(text, texToHtml) });
+}
+return { h, toast, setTextLang, rich, richMarkdown };
 })();
 const __mod_tutor = (() => {
 const { fenceStudent: quote, FIGURE_OMITTED, JUDGE } = __mod_guidance;
@@ -1361,10 +1478,56 @@ const { LETTERS } = __mod_labels;
 const { h } = __mod_dom;
 const { plain } = __mod_text;
 const API = "https://api.anthropic.com/v1/messages";
+const OPENAI_API = "https://api.openai.com/v1/chat/completions";
+const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_MODEL = "claude-sonnet-5-5";
+const PROVIDER_MODELS = {
+openai: "gpt-4o",
+gemini: "gemini-2.5-flash",
+anthropic: "claude-sonnet-4-5",
+};
 const MARK_KINDS = new Set(["tick", "cross", "circle", "underline", "question"]);
 const VERDICTS = ["correct", "partial", "incorrect", "blank"];
-let customConfig = { endpoint: null, headers: null, agentName: null, grader: null, timeoutMs: 120_000 };
+const MODES = new Set(["coach", "free", "strict"]);
+const GRADER_STORE_KEY = "pen:grader";
+let customConfig = {
+endpoint: null,
+headers: null,
+agentName: null,
+grader: null,
+timeoutMs: 120_000,
+mode: null,
+prompt: null,
+provider: null,
+apiKey: null,
+model: null,
+maxImagesPerCall: null,
+};
+function isArtifactHost() {
+const host = typeof location !== "undefined" ? location.hostname : "";
+return /(^|\.)claudeusercontent\.com$/.test(host);
+}
+function savedGraderConfig() {
+if (isArtifactHost() || typeof localStorage === "undefined") return {};
+try {
+const raw = localStorage.getItem(GRADER_STORE_KEY);
+if (!raw) return {};
+const parsed = JSON.parse(raw);
+return parsed && typeof parsed === "object" ? parsed : {};
+} catch {
+return {};
+}
+}
+function saveGraderConfig(cfg) {
+if (typeof localStorage === "undefined") return;
+try {
+if (!cfg || (!cfg.provider && !cfg.endpoint && !cfg.apiKey && !cfg.model)) {
+localStorage.removeItem(GRADER_STORE_KEY);
+} else {
+localStorage.setItem(GRADER_STORE_KEY, JSON.stringify(cfg));
+}
+} catch {}
+}
 function configureTutor(opts = {}) {
 if (!opts || typeof opts !== "object") return { ...customConfig };
 if ("endpoint" in opts) customConfig.endpoint = typeof opts.endpoint === "string" && opts.endpoint.trim() ? opts.endpoint.trim() : null;
@@ -1372,15 +1535,66 @@ if ("headers" in opts) customConfig.headers = opts.headers && typeof opts.header
 if ("agentName" in opts) customConfig.agentName = typeof opts.agentName === "string" && opts.agentName.trim() ? opts.agentName.trim() : null;
 if ("grader" in opts) customConfig.grader = typeof opts.grader === "function" ? opts.grader : null;
 if ("timeoutMs" in opts && Number.isFinite(opts.timeoutMs) && opts.timeoutMs > 0) customConfig.timeoutMs = opts.timeoutMs;
+if ("mode" in opts) {
+const m = typeof opts.mode === "string" ? opts.mode.trim().toLowerCase() : "";
+customConfig.mode = MODES.has(m) ? m : null;
+}
+if ("prompt" in opts) customConfig.prompt = typeof opts.prompt === "string" && opts.prompt.trim() ? opts.prompt.trim() : null;
+if ("provider" in opts) customConfig.provider = typeof opts.provider === "string" && opts.provider.trim() ? opts.provider.trim().toLowerCase() : null;
+if ("apiKey" in opts) customConfig.apiKey = typeof opts.apiKey === "string" && opts.apiKey.trim() ? opts.apiKey.trim() : null;
+if ("model" in opts) customConfig.model = typeof opts.model === "string" && opts.model.trim() ? opts.model.trim() : null;
+if ("maxImagesPerCall" in opts) {
+customConfig.maxImagesPerCall = Number.isInteger(opts.maxImagesPerCall) && opts.maxImagesPerCall > 0 ? opts.maxImagesPerCall : null;
+}
 return { ...customConfig };
 }
 function pageConfig() {
 return typeof window !== "undefined" && window.penSheetConfig && typeof window.penSheetConfig === "object" ? window.penSheetConfig : null;
 }
+function gradingMode() {
+const candidates = [
+customConfig.mode,
+pageConfig()?.mode,
+typeof document !== "undefined" ? document.querySelector?.("pen-submit[mode]")?.getAttribute?.("mode") : null,
+typeof document !== "undefined" ? document.querySelector?.('meta[name="pen-mode"]')?.getAttribute?.("content") : null,
+];
+for (const c of candidates) {
+const m = typeof c === "string" ? c.trim().toLowerCase() : "";
+if (MODES.has(m)) return m;
+}
+return "coach";
+}
+function gradingPrompt() {
+const candidates = [
+customConfig.prompt,
+pageConfig()?.prompt,
+typeof document !== "undefined" ? document.querySelector?.("pen-submit[prompt]")?.getAttribute?.("prompt") : null,
+typeof document !== "undefined" ? document.querySelector?.('meta[name="pen-prompt"]')?.getAttribute?.("content") : null,
+];
+for (const c of candidates) {
+if (typeof c === "string" && c.trim()) return c.trim();
+}
+return "";
+}
+function activeByok() {
+if (isArtifactHost()) return null;
+const cfg = pageConfig();
+const saved = savedGraderConfig();
+const provider = (customConfig.provider || cfg?.provider || saved.provider || "").trim().toLowerCase();
+if (!provider || provider === "auto" || provider === "endpoint") return null;
+const apiKey = (customConfig.apiKey || cfg?.apiKey || saved.apiKey || "").trim();
+if (!apiKey) return null;
+const model = (customConfig.model || cfg?.model || saved.model || PROVIDER_MODELS[provider] || "").trim();
+return { provider, apiKey, model };
+}
 function gradingEndpoint() {
 if (customConfig.endpoint) return customConfig.endpoint;
 const cfg = pageConfig();
 if (typeof cfg?.endpoint === "string" && cfg.endpoint.trim()) return cfg.endpoint.trim();
+const saved = savedGraderConfig();
+if ((!saved.provider || saved.provider === "endpoint") && typeof saved.endpoint === "string" && saved.endpoint.trim()) {
+return saved.endpoint.trim();
+}
 if (typeof document !== "undefined") {
 const attr = document.querySelector?.("pen-submit[endpoint]")?.getAttribute?.("endpoint")?.trim();
 if (attr) return attr;
@@ -1399,13 +1613,14 @@ return agent && typeof agent.base === "string" ? agent : null;
 }
 function tutorName(fallback = "Claude") {
 const attr = typeof document !== "undefined" ? document.querySelector?.("pen-submit[agent]")?.getAttribute?.("agent")?.trim() : "";
-return customConfig.agentName || pageConfig()?.agentName || attr || localAgent()?.name || fallback;
+const byok = activeByok();
+const byokLabel = byok ? (byok.provider === "openai" ? "ChatGPT" : byok.provider === "gemini" ? "Gemini" : "Claude") : "";
+return customConfig.agentName || pageConfig()?.agentName || attr || byokLabel || localAgent()?.name || fallback;
 }
 function tutorAvailable(setting = "auto") {
 if (typeof setting === "boolean") return setting;
-if (typeof customConfig.grader === "function" || Boolean(gradingEndpoint())) return true;
-const host = typeof location !== "undefined" ? location.hostname : "";
-return Boolean(localAgent()) || (typeof window !== "undefined" && typeof window.claude?.complete === "function") || /(^|\.)claudeusercontent\.com$/.test(host);
+if (typeof customConfig.grader === "function" || Boolean(activeByok()) || Boolean(gradingEndpoint())) return true;
+return Boolean(localAgent()) || (typeof window !== "undefined" && typeof window.claude?.complete === "function") || isArtifactHost();
 }
 const AGENT_FAILURES = 30;
 const AGENT_ASK_MS = 40_000;
@@ -1528,39 +1743,171 @@ onAgentAway(false);
 }
 return coerceReply(data);
 }
-async function askClaude(content, { model = DEFAULT_MODEL, maxTokens = 3000, reuse, stillWanted, expects, submission } = {}) {
-if (typeof customConfig.grader === "function") {
-return coerceReply(await customConfig.grader({ content, submission: submission ?? null, expects: expects ?? null }));
+function toOpenAiContent(content) {
+return (Array.isArray(content) ? content : [{ type: "text", text: String(content ?? "") }]).map((b) => {
+if (b.type === "image" && b.source?.data) {
+const mt = b.source.media_type || "image/png";
+return { type: "image_url", image_url: { url: `data:${mt};base64,${b.source.data}` } };
 }
-const endpoint = gradingEndpoint();
-if (endpoint) return askEndpoint(endpoint, content, { stillWanted, expects, submission });
-const agent = localAgent();
-if (agent) return askAgent(agent, content, { reuse, stillWanted, expects });
-try {
-const res = await fetch(API, {
-method: "POST",
-headers: { "content-type": "application/json" },
-body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: "user", content }] }),
+if (b.type === "document" && b.source?.data) {
+const mt = b.source.media_type || "application/pdf";
+return { type: "file", file: { filename: "worksheet.pdf", file_data: `data:${mt};base64,${b.source.data}` } };
+}
+return { type: "text", text: String(b.text ?? "") };
 });
-if (!res.ok) {
+}
+function toGeminiParts(content) {
+return (Array.isArray(content) ? content : [{ type: "text", text: String(content ?? "") }]).map((b) => {
+if ((b.type === "image" || b.type === "document") && b.source?.data) {
+return { inline_data: { mime_type: b.source.media_type || (b.type === "document" ? "application/pdf" : "image/png"), data: b.source.data } };
+}
+return { text: String(b.text ?? "") };
+});
+}
+async function readErrorDetail(res) {
 let detail = "";
 try {
 const raw = await res.text();
 try {
-detail = JSON.parse(raw)?.error?.message || raw;
+const j = JSON.parse(raw);
+detail = j?.error?.message || j?.message || raw;
 } catch {
 detail = raw;
 }
 } catch {}
-detail = String(detail).replace(/\s+/g, " ").trim().slice(0, 140);
+return String(detail).replace(/\s+/g, " ").trim().slice(0, 140);
+}
+async function askOpenAi(content, { apiKey, model, maxTokens }) {
+const res = await fetchWithin(customConfig.timeoutMs, OPENAI_API, {
+method: "POST",
+headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+body: JSON.stringify({
+model: model || PROVIDER_MODELS.openai,
+max_completion_tokens: maxTokens,
+messages: [{ role: "user", content: toOpenAiContent(content) }],
+}),
+});
+if (!res.ok) {
+const detail = await readErrorDetail(res);
+throw new Error(`OpenAI API error ${res.status}${detail ? `: ${detail}` : ""}`);
+}
+const data = await res.json();
+const msg = data?.choices?.[0]?.message?.content;
+const text = Array.isArray(msg) ? msg.map((p) => p?.text ?? "").join("") : String(msg ?? "");
+if (!text.trim()) throw new Error("Empty reply from OpenAI");
+return text;
+}
+async function askGemini(content, { apiKey, model, maxTokens }) {
+const targetModel = model || PROVIDER_MODELS.gemini;
+const url = `${GEMINI_API}/${encodeURIComponent(targetModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+const res = await fetchWithin(customConfig.timeoutMs, url, {
+method: "POST",
+headers: { "content-type": "application/json" },
+body: JSON.stringify({
+contents: [{ role: "user", parts: toGeminiParts(content) }],
+generationConfig: { maxOutputTokens: maxTokens },
+}),
+});
+if (!res.ok) {
+const detail = await readErrorDetail(res);
+throw new Error(`Gemini API error ${res.status}${detail ? `: ${detail}` : ""}`);
+}
+const data = await res.json();
+const parts = data?.candidates?.[0]?.content?.parts ?? [];
+const text = parts.map((p) => p?.text ?? "").join("");
+if (!text.trim()) throw new Error("Empty reply from Gemini");
+return text;
+}
+async function askAnthropic(content, { apiKey = null, model = DEFAULT_MODEL, maxTokens = 3000 }) {
+const headers = { "content-type": "application/json" };
+if (apiKey) {
+headers["x-api-key"] = apiKey;
+headers["anthropic-version"] = "2023-06-01";
+headers["anthropic-dangerous-direct-browser-access"] = "true";
+}
+const res = await fetchWithin(customConfig.timeoutMs, API, {
+method: "POST",
+headers,
+body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: "user", content }] }),
+});
+if (!res.ok) {
+const detail = await readErrorDetail(res);
 throw new Error(`Claude API error ${res.status}${detail ? `: ${detail}` : ""}`);
 }
 const data = await res.json();
 const text = (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("");
 if (!text) throw new Error("Empty reply from Claude");
 return text;
+}
+async function batchImageRequest(content, limit, sendChunk) {
+const blocks = Array.isArray(content) ? content : [];
+const imageIndices = [];
+for (let i = 0; i < blocks.length; i++) {
+if (blocks[i]?.type === "image") imageIndices.push(i);
+}
+if (!limit || imageIndices.length <= limit) return sendChunk(blocks, { isTranscription: false });
+const transcriptions = new Map();
+for (let start = 0; start < imageIndices.length; start += limit) {
+const slice = imageIndices.slice(start, start + limit);
+const chunkBlocks = [
+{
+type: "text",
+text: [
+"Transcribe the student's handwriting, formulas, tables, labels, and diagrams in each image below VERBATIM.",
+"Do NOT grade, evaluate, or fix mistakes. Copy every error, crossed-out step, and symbol exactly as written; use [?] only for genuinely illegible marks.",
+"Label each transcription with the exact image heading shown before it.",
+].join("\n"),
+},
+];
+for (const idx of slice) {
+const prev = idx > 0 && blocks[idx - 1]?.type === "text" ? blocks[idx - 1].text : `Image ${idx + 1}`;
+chunkBlocks.push({ type: "text", text: prev }, blocks[idx]);
+}
+const text = await sendChunk(chunkBlocks, { isTranscription: true });
+transcriptions.set(slice[0], { batchStart: start + 1, batchEnd: start + slice.length, text: String(text ?? "").trim() });
+}
+const finalBlocks = [];
+for (let i = 0; i < blocks.length; i++) {
+if (blocks[i]?.type === "image") {
+const batch = transcriptions.get(i);
+if (batch) {
+finalBlocks.push({
+type: "text",
+text: `[Verbatim handwriting transcriptions for images ${batch.batchStart}–${batch.batchEnd}]:\n${batch.text}`,
+});
+}
+continue;
+}
+finalBlocks.push(blocks[i]);
+}
+return sendChunk(finalBlocks, { isTranscription: false });
+}
+async function askClaude(content, { model = DEFAULT_MODEL, maxTokens = 3000, reuse, stillWanted, expects, submission } = {}) {
+if (typeof customConfig.grader === "function") {
+return coerceReply(await customConfig.grader({ content, submission: submission ?? null, expects: expects ?? null }));
+}
+const byok = activeByok();
+if (byok) {
+const limit = customConfig.maxImagesPerCall ?? 0;
+const send = (blocks, { isTranscription }) => {
+const tokens = isTranscription ? Math.min(4000, maxTokens) : maxTokens;
+if (byok.provider === "openai") return askOpenAi(blocks, { apiKey: byok.apiKey, model: byok.model, maxTokens: tokens });
+if (byok.provider === "gemini") return askGemini(blocks, { apiKey: byok.apiKey, model: byok.model, maxTokens: tokens });
+return askAnthropic(blocks, { apiKey: byok.apiKey, model: byok.model || PROVIDER_MODELS.anthropic, maxTokens: tokens });
+};
+return batchImageRequest(content, limit, send);
+}
+const endpoint = gradingEndpoint();
+if (endpoint) return askEndpoint(endpoint, content, { stillWanted, expects, submission });
+const agent = localAgent();
+if (agent) return askAgent(agent, content, { reuse, stillWanted, expects });
+const limit = customConfig.maxImagesPerCall ?? (isArtifactHost() ? 4 : 0);
+try {
+return await batchImageRequest(content, limit, (blocks, { isTranscription }) =>
+askAnthropic(blocks, { model, maxTokens: isTranscription ? Math.min(4000, maxTokens) : maxTokens }),
+);
 } catch (err) {
-if (typeof window.claude?.complete === "function" && content.every((b) => b.type === "text")) {
+if (typeof window !== "undefined" && typeof window.claude?.complete === "function" && content.every((b) => b.type === "text")) {
 return window.claude.complete(content.map((b) => b.text).join("\n\n"));
 }
 throw err;
@@ -1811,17 +2158,49 @@ text: 'Reply with only a JSON object: {"reply": "...", "solid": true | false}\n-
 });
 return blocks;
 }
-function pageRequest({ title, pageText, items, lang, feedbackLang, dispute = null }) {
+function coachingShape({ mode, dispute, withMarks = true, customPrompt = "" }) {
+const extra = customPrompt ? `\n\nAuthor's specific coaching instructions (follow closely):\n${customPrompt}` : "";
+if (mode === "strict") {
+return `Reply with only a JSON object:
+{"questions": [{"id": "<the field's name>", "readAs": "...", "verdict": "correct" | "partial" | "incorrect" | "blank", "comment": "...", "correctAnswer": "...", "nextTime": "..."${withMarks ? ', "marks": [...]' : ""}}]${dispute ? "" : ', "summary": "..."'}}
+One entry per field. A field that only records a preference or a name is "correct" with no comment. "blank" is for nothing written, or nothing that's an answer yet (test strokes, a scribble): say what you need from them, without giving the answer away.
+- readAs: your transcription of the handwriting, exactly as written; [?] for anything you can't make out. A field with an image always has something written, even if it isn't an answer yet ("[a scribble]").
+- comment: one or two specific sentences about their work.
+- correctAnswer and nextTime: only for a mistake.
+${dispute ? "" : "- summary: two or three sentences: how it went and the one thing to practise next.\n"}${withMarks ? `- ${MARKS_HELP}` : ""}${extra}`;
+}
+if (mode === "free" && !dispute) {
+return `Reply in clear, warm, intellectually honest Markdown (no JSON needed).
+Structure your feedback however teaches best for this student's work:
+- Acknowledge what they actually wrote (transcribing key handwritten work verbatim so they can verify you read it right).
+- Diagnose the exact reasoning or misconception rather than just saying right/wrong.
+- Use Socratic guiding questions, step-by-step explanations, small examples, tables, or $math$ / $$math$$ wherever they illuminate the idea.
+- Close with one concrete, motivating next step.${extra}`;
+}
+return `You are a thoughtful, world-class tutor — not a rigid grading script. Choose the pedagogical approach that helps this student learn most from their actual attempt (Socratic guiding questions, misconception diagnosis, step-by-step walkthrough, rubric breakdown, mastery label, score, or brief confirmation when solid).
+You may reply in EITHER:
+1. Flexible JSON (recommended when giving field-by-field feedback anchored under each answer box):
+{"questions": [{"id": "<field name>", "readAs": "...", "badge": "...", "verdict": "correct" | "partial" | "incorrect" | "blank", "feedback": "...", "nudge": "...", "solution": "...", "nextTime": "..."${withMarks ? ', "marks": [...]' : ""}}]${dispute ? "" : ', "summary": "..."'}}
+- readAs: verbatim transcription of what was handwritten (mistakes included, [?] for illegible marks; "" if nothing handwritten).
+- badge (optional): a short human label in your own words if helpful (e.g. "Solid proof", "Good setup — check base case", "8/10", "Thoughtful draft").
+- verdict (optional): "correct" | "partial" | "incorrect" | "blank" when a standard status fits; omit for open reflections or preference fields.
+- feedback: rich Markdown coaching (as concise or detailed as genuinely helpful — bullet steps, $math$, $$display math$$, code blocks, or tables). Praise specific reasoning; when something is off, explain *why* and build from their own work.
+- nudge (optional, shown collapsed so the student can think first): a Socratic question or gentle clue before revealing the answer.
+- solution (optional, shown collapsed behind a toggle): a clean worked solution or model answer when seeing the full fix helps.
+- nextTime (optional): one concrete habit or check to carry forward.
+${dispute ? "" : "- summary: rich Markdown big-picture synthesis — what clicked, the core idea to sharpen, and one suggested next step.\n"}${withMarks ? `- ${MARKS_HELP}\n` : ""}2. OR plain rich Markdown directly (no JSON wrapper) if a holistic teacher letter fits this worksheet better.${extra}`;
+}
+function pageRequest({ title, pageText, items, lang, feedbackLang, dispute = null, mode = gradingMode(), prompt = gradingPrompt() }) {
 return [
 {
 type: "text",
 text: [
 `A student handed in their work on this page: "${title}".`,
 `What the page says:\n${quote(pageText)}`,
-"Grade each field below against what the page asks. Read handwriting first: copy it exactly as written, mistakes included, before you judge it.",
+"Read every handwritten image carefully first: transcribe what the student actually wrote (mistakes included, never silently correcting errors) before responding.",
 common(lang, feedbackLang),
 ...(dispute
-? [`The student says you misread their handwriting in this field. In their words, they wrote: ${quote(dispute)}. Re-read the image. If their reading plausibly matches what is written, grade that; if not, grade what you see and say kindly in the comment what you read.`]
+? [`The student says you misread their handwriting in this field. In their words, they wrote: ${quote(dispute)}. Re-read the image. If their reading plausibly matches what is written, assess that; if not, assess what you see and explain kindly what you read.`]
 : []),
 ].join("\n\n"),
 },
@@ -1831,18 +2210,12 @@ common(lang, feedbackLang),
 ]),
 {
 type: "text",
-text: `Reply with only a JSON object:
-{"questions": [{"id": "<the field's name>", "readAs": "...", "verdict": "correct" | "partial" | "incorrect" | "blank", "comment": "...", "correctAnswer": "...", "nextTime": "...", "marks": [...]}]${dispute ? "" : ', "summary": "..."'}}
-One entry per field. A field that only records a preference or a name is "correct" with no comment. "blank" is for nothing written, or nothing that's an answer yet (test strokes, a scribble): say what you need from them, without giving the answer away.
-- readAs: your transcription of the handwriting, exactly as written; [?] for anything you can't make out. A field with an image always has something written, even if it isn't an answer yet ("[a scribble]").
-- comment: one or two specific sentences about their work.
-- correctAnswer and nextTime: only for a mistake.
-${dispute ? "" : "- summary: two or three sentences: how it went and the one thing to practise next.\n"}- ${MARKS_HELP}`,
+text: coachingShape({ mode, dispute, withMarks: true, customPrompt: prompt }),
 },
 ];
 }
 pageRequest.images = (items) => items.flatMap(({ inks = [] }) => inkBlocks(inks));
-function documentPageRequest({ title, pageText, items, files, lang, feedbackLang }) {
+function documentPageRequest({ title, pageText, items, files, lang, feedbackLang, mode = gradingMode(), prompt = gradingPrompt() }) {
 const fileBlocks = files.flatMap((f, idx) => {
 const data = f.dataUrl.slice(f.dataUrl.indexOf(",") + 1);
 const isPdf = f.mediaType === "application/pdf";
@@ -1860,20 +2233,44 @@ text: [
 `A student completed this worksheet in a PDF or notes app and uploaded the filled pages: "${title}".`,
 `What the page asks:\n${quote(pageText)}`,
 `Fields on this page (each answer box in the PDF is tagged with [field id]):\n${items.map(({ q, label }) => `- "${q.id}"${label ? ` (${label})` : ""}`).join("\n")}`,
-"Read the student's handwriting from the attached PDF/images carefully. Transcribe each answer verbatim (mistakes included, [?] for anything illegible) before judging it.",
+"Read the student's handwriting from the attached PDF/images carefully. Transcribe each answer verbatim (mistakes included, [?] for anything illegible) before responding.",
 common(lang, feedbackLang),
 ].join("\n\n"),
 },
 ...fileBlocks,
 {
 type: "text",
-text: `Reply with only a JSON object:
-{"questions": [{"id": "<the field's name>", "readAs": "...", "verdict": "correct" | "partial" | "incorrect" | "blank", "comment": "...", "correctAnswer": "...", "nextTime": "..."}], "summary": "..."}
-One entry per field listed above.
-- readAs: your verbatim transcription of what the student wrote for that field ("" if blank).
-- comment: one or two specific, encouraging sentences about their work.
-- correctAnswer and nextTime: include for partial/incorrect answers.
-- summary: two or three sentences summarizing how it went and what to practise next.`,
+text: coachingShape({ mode, dispute: null, withMarks: false, customPrompt: prompt }),
+},
+];
+}
+function followUpRequest({ title, pageText, gradedSummary = "", gradedMarkdown = "", gradedFields = [], question, history = [], lang, feedbackLang }) {
+const fieldDigest = gradedFields
+.map((f) => {
+const parts = [`- ${f.id}`];
+if (f.badge || f.verdict) parts.push(`[${f.badge || f.verdict}]`);
+if (f.readAs) parts.push(`wrote: ${f.readAs}`);
+if (f.comment) parts.push(`feedback: ${f.comment}`);
+return parts.join(" — ");
+})
+.join("\n");
+const convo = history.map((m) => `${m.role === "student" ? "Student" : "Tutor"}: ${m.text}`).join("\n\n");
+return [
+{
+type: "text",
+text: [
+`You are continuing an educational coaching conversation about the worksheet "${title}".`,
+`Worksheet context:\n${quote(pageText)}`,
+fieldDigest ? `Earlier assessment by field:\n${fieldDigest}` : "",
+gradedSummary ? `Earlier summary:\n${gradedSummary}` : "",
+gradedMarkdown ? `Earlier coaching note:\n${gradedMarkdown}` : "",
+convo ? `Conversation so far:\n${convo}` : "",
+`Student's new message: ${quote(question)}`,
+"Reply directly in clear, encouraging Markdown (no JSON). Answer their question, check their proposed fix, or guide them with a concrete step or Socratic question. Keep it focused and genuinely helpful.",
+common(lang, feedbackLang),
+]
+.filter(Boolean)
+.join("\n\n"),
 },
 ];
 }
@@ -1889,20 +2286,31 @@ for (const q of questions) {
 const g = byId.get(String(q.id));
 if (!g) continue;
 const said = typeof g.verdict === "string" ? g.verdict.trim().toLowerCase() : "";
-const verdict = VERDICTS.includes(said) ? said : "incorrect";
+const badge = typeof g.badge === "string" ? g.badge.trim().slice(0, 80) : "";
+const feedback = typeof g.feedback === "string" ? g.feedback.trim() : "";
+const rawComment = typeof g.comment === "string" ? g.comment.trim() : "";
+const comment = feedback || rawComment;
+const hasOpenCoaching = Boolean(badge || feedback || typeof g.nudge === "string" || typeof g.solution === "string");
+const verdict = VERDICTS.includes(said) ? said : hasOpenCoaching && !said ? "" : "incorrect";
 const met =
 q.rubric && Array.isArray(g.met)
 ? [...new Set(g.met.map(Number).filter((k) => Number.isInteger(k) && k >= 1 && k <= q.rubric.length))].sort((a, b) => a - b)
 : undefined;
 const share = met ? (q.points * met.length) / q.rubric.length : q.points / 2;
 const given = typeof g.points === "number" && Number.isFinite(g.points) ? g.points : verdict === "partial" ? share : 0;
+const nudge = typeof g.nudge === "string" ? g.nudge.trim() : typeof g.hint === "string" ? g.hint.trim() : "";
+const solution = typeof g.solution === "string" ? g.solution.trim() : "";
 grades[q.id] = {
 verdict,
+badge,
 points:
 verdict === "correct" ? q.points : verdict === "blank" || (verdict === "incorrect" && given >= q.points) ? 0 : Math.max(0, Math.min(q.points, given)),
 readAs: typeof g.readAs === "string" ? g.readAs.trim() : "",
 readUnsure: g.readUnsure === true && typeof g.readAs === "string" && Boolean(g.readAs.trim()),
-comment: typeof g.comment === "string" ? g.comment.trim() : "",
+comment,
+feedback,
+nudge,
+solution,
 correctAnswer: typeof g.correctAnswer === "string" && verdict !== "correct" ? g.correctAnswer.trim() : "",
 nextTime: typeof g.nextTime === "string" && verdict !== "correct" ? g.nextTime.trim().slice(0, 200) : "",
 misconception: typeof g.misconception === "string" && (verdict === "incorrect" || verdict === "partial") ? g.misconception.trim().slice(0, 120) : "",
@@ -1917,7 +2325,9 @@ ideas:
 marks: Array.isArray(g.marks) ? g.marks.filter((m) => m && typeof m === "object") : [],
 };
 }
-return { grades, summary: typeof reply?.summary === "string" ? reply.summary.trim() : "" };
+const summary = typeof reply?.summary === "string" ? reply.summary.trim() : "";
+const markdown = typeof reply?.markdown === "string" ? reply.markdown.trim() : typeof reply?.report === "string" ? reply.report.trim() : "";
+return { grades, summary, markdown };
 }
 function marksToPaper(marks, inks) {
 const byId = new Map(inks.map((ink) => [ink.id, ink]));
@@ -1939,7 +2349,7 @@ out.get(ink.id).push(mark);
 }
 return out;
 }
-return { DEFAULT_MODEL, VERDICTS, configureTutor, gradingEndpoint, localAgent, tutorName, tutorAvailable, whenAgentAway, watchForNewQuiz, expectsGrades, reportProgress, reportDevice, askClaude, parseReply, questionBlocks, gradeRequest, hintRequest, explainRequest, pageRequest, documentPageRequest, normalizeGrades, marksToPaper };
+return { DEFAULT_MODEL, PROVIDER_MODELS, VERDICTS, isArtifactHost, savedGraderConfig, saveGraderConfig, configureTutor, gradingMode, gradingPrompt, activeByok, gradingEndpoint, localAgent, tutorName, tutorAvailable, whenAgentAway, watchForNewQuiz, expectsGrades, reportProgress, reportDevice, toOpenAiContent, toGeminiParts, batchImageRequest, askClaude, parseReply, questionBlocks, gradeRequest, hintRequest, explainRequest, pageRequest, documentPageRequest, followUpRequest, normalizeGrades, marksToPaper };
 })();
 const __mod_device = (() => {
 const { localAgent, reportDevice } = __mod_tutor;
@@ -2416,14 +2826,14 @@ return new Blob([buildPdfFromJpegs(jpegPages)], { type: "application/pdf" });
 return { buildPdfFromJpegs, exportWorksheetPdf };
 })();
 const __mod_pen_input = (() => {
-const { h, rich } = __mod_dom;
+const { h, rich, richMarkdown } = __mod_dom;
 const { FIGURE_OMITTED } = __mod_guidance;
 const { browserStore, keptWrites, orderedStorage, saveLater } = __mod_saving;
 const { InkPad, fingersDraw, tools } = __mod_ink;
 const { watchDevice } = __mod_device;
 const { exportWorksheetPdf } = __mod_pdf;
-const { askClaude, configureTutor, documentPageRequest, expectsGrades, marksToPaper, normalizeGrades, pageRequest, parseReply, localAgent, reportProgress, tutorAvailable, tutorName, watchForNewQuiz, whenAgentAway } = __mod_tutor;
-const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #ffffff;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\nposition: relative;\nz-index: 1;\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.inkpad .predict {\nz-index: 2;\n}\n.inkpad .marks {\nz-index: 3;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\nz-index: 0;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.28) calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad,\nhtml.pen-dark .inkpad {\nbackground-color: #17191e !important;\nborder-color: #323742 !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-ruled,\nhtml.pen-dark .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.12) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-grid,\nhtml.pen-dark .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad canvas,\nhtml[data-darkreader-scheme=\"dark\"] .inkpad .figure-bg,\nhtml.pen-dark .inkpad canvas,\nhtml.pen-dark .inkpad .figure-bg {\nfilter: invert(0.92) hue-rotate(180deg);\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks path,\nhtml.pen-dark .marks path {\nstroke: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks text,\nhtml.pen-dark .marks text {\nfill: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks .mark-note,\nhtml.pen-dark .marks .mark-note {\ncolor: #fca5a5;\ntext-shadow: 0 0 4px #17191e, 0 0 4px #17191e, 0 0 4px #17191e;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\n.pen-sr {\nposition: absolute;\nwidth: 1px;\nheight: 1px;\noverflow: hidden;\nclip-path: inset(50%);\nwhite-space: nowrap;\n}\npen-toolbar {\nposition: fixed;\nright: 6px;\ntop: 50%;\ntransform: translateY(-50%);\nz-index: 30;\n}\n.pen-has-toolbar body {\npadding-right: 54px;\n}\n.pen-bar {\nposition: relative;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\npadding: 0.25rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-bar > button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0;\ndisplay: grid;\nplace-items: center;\nfont-size: 1rem;\nline-height: 1;\n}\n.pen-popover {\nposition: absolute;\nright: calc(100% + 8px);\nbottom: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nmin-width: 155px;\npadding: 0.35rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-popover[hidden] {\ndisplay: none;\n}\n.pen-popover button {\nmin-height: 36px;\npadding: 0 0.65rem;\ntext-align: left;\nfont-size: 0.9rem;\nwhite-space: nowrap;\n}\n.pen-has-toolbar pen-input .pen-tools {\ndisplay: none;\n}\n.pen-pad-btn {\nposition: absolute;\nright: 6px;\nz-index: 4;\nmin-width: 32px;\nmin-height: 32px;\npadding: 0 0.45rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.95rem;\nline-height: 1;\ncursor: pointer;\n}\n.pen-more-in {\nbottom: 6px;\nfont-weight: 700;\n}\n.pen-pin-in {\ntop: 6px;\nfont-size: 0.85rem;\n}\n.pen-pin-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\n.inkpad.readonly .pen-pad-btn {\ndisplay: none;\n}\n.pen-pinned {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 28;\ndisplay: flex;\nalign-items: flex-start;\ngap: 0.5rem;\npadding: 0.45rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-pinned-body {\nflex: 1;\nmin-width: 0;\nmax-height: 28vh;\noverflow-y: auto;\nfont-size: 0.95rem;\nline-height: 1.4;\n}\n.pen-pinned-body > :first-child {\nmargin-top: 0;\n}\n.pen-pinned-body > :last-child {\nmargin-bottom: 0;\n}\n.pen-unpin {\nflex: none;\nmin-width: 32px;\nmin-height: 32px;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1rem 0;\n}\n.pen-submit-row {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nalign-items: center;\n}\n.pen-boox-btn {\nfont-size: 0.9rem;\n}\n.pen-boox-file[hidden] {\ndisplay: none;\n}\n.pen-feedback {\nmargin: 0.5rem 0 1rem;\npadding: 0.5rem 0.8rem;\nborder: 1px solid #000;\nborder-left-width: 4px;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback p {\nmargin: 0.3rem 0;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #ffffff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.35) calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px));\n}\nhtml.pen-dark body {\nbackground: #111317 !important;\ncolor: #e6e8ec !important;\n}\nhtml.pen-dark .pen-bar,\nhtml.pen-dark .pen-popover,\nhtml.pen-dark .pen-pinned,\nhtml.pen-dark .pen-feedback,\nhtml.pen-dark .pen-sheet-card,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar,\nhtml[data-darkreader-scheme=\"dark\"] .pen-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pinned {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-pad-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pad-btn {\nbackground: rgb(28 31 38 / 0.9) !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button,\nhtml.pen-dark .pen-unpin,\nhtml.pen-dark .pen-sheet-btn,\nhtml.pen-dark .pen-boox-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button,\nhtml[data-darkreader-scheme=\"dark\"] .pen-unpin,\nhtml[data-darkreader-scheme=\"dark\"] .pen-boox-btn {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button[aria-pressed=\"true\"],\nhtml.pen-dark .pen-pin-in[aria-pressed=\"true\"],\nhtml.pen-dark pen-submit .pen-send,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-pin-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] pen-submit .pen-send {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n.pen-sheet-card {\nmargin-top: 0.75rem;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-sheet-head {\ndisplay: flex;\nalign-items: baseline;\njustify-content: space-between;\ngap: 0.5rem;\nfont-size: 1.05rem;\n}\n.pen-sheet-count {\nfont-size: 0.85rem;\npadding: 0.15rem 0.5rem;\nborder: 1px solid #000;\nborder-radius: 999px;\n}\n.pen-sheet-msg {\nmargin: 0.4rem 0 0.65rem;\nfont-size: 0.92rem;\n}\n.pen-sheet-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nmargin-bottom: 0.6rem;\n}\n.pen-sheet-btn {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.75rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\ntext-decoration: none;\ncursor: pointer;\n}\n.pen-sheet-btn[hidden] {\ndisplay: none;\n}\n.pen-sheet-skipped {\nmargin: 0.25rem 0 0.6rem;\nfont-size: 0.88rem;\n}\n.pen-sheet-item {\nmargin: 0.7rem 0;\npadding-top: 0.5rem;\nborder-top: 1px solid #000;\n}\n.pen-sheet-item-head {\nfont-weight: 700;\nfont-size: 0.95rem;\nmargin-bottom: 0.3rem;\n}\n.pen-sheet-typed {\nmargin: 0.25rem 0 0.4rem;\nwhite-space: pre-wrap;\n}\n.pen-sheet-fig {\nmargin: 0.35rem 0 0;\n}\n.pen-sheet-fig img {\ndisplay: block;\nmax-width: 100%;\nborder: 1px solid #000;\nborder-radius: 6px;\n}\n.pen-sheet-details {\nmargin-top: 0.65rem;\n}\n.pen-sheet-details summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 32px;\n}\n@media print {\npen-toolbar,\n.pen-tools,\n.pen-pad-btn,\n.pen-pinned,\n.pen-sheet-actions,\n.pen-save,\n.pen-boox-btn,\npen-submit .pen-send {\ndisplay: none !important;\n}\n.pen-has-toolbar body {\npadding-right: 0 !important;\n}\n}";
+const { activeByok, askClaude, configureTutor, documentPageRequest, expectsGrades, followUpRequest, isArtifactHost, marksToPaper, normalizeGrades, pageRequest, parseReply, PROVIDER_MODELS, localAgent, reportProgress, savedGraderConfig, saveGraderConfig, tutorAvailable, tutorName, watchForNewQuiz, whenAgentAway } = __mod_tutor;
+const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #ffffff;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\nposition: relative;\nz-index: 1;\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.inkpad .predict {\nz-index: 2;\n}\n.inkpad .marks {\nz-index: 3;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\nz-index: 0;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.28) calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad,\nhtml.pen-dark .inkpad {\nbackground-color: #17191e !important;\nborder-color: #323742 !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-ruled,\nhtml.pen-dark .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.12) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-grid,\nhtml.pen-dark .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad canvas,\nhtml[data-darkreader-scheme=\"dark\"] .inkpad .figure-bg,\nhtml.pen-dark .inkpad canvas,\nhtml.pen-dark .inkpad .figure-bg {\nfilter: invert(0.92) hue-rotate(180deg);\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks path,\nhtml.pen-dark .marks path {\nstroke: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks text,\nhtml.pen-dark .marks text {\nfill: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks .mark-note,\nhtml.pen-dark .marks .mark-note {\ncolor: #fca5a5;\ntext-shadow: 0 0 4px #17191e, 0 0 4px #17191e, 0 0 4px #17191e;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\n.pen-sr {\nposition: absolute;\nwidth: 1px;\nheight: 1px;\noverflow: hidden;\nclip-path: inset(50%);\nwhite-space: nowrap;\n}\npen-toolbar {\nposition: fixed;\nright: 6px;\ntop: 50%;\ntransform: translateY(-50%);\nz-index: 30;\n}\n.pen-has-toolbar body {\npadding-right: 54px;\n}\n.pen-bar {\nposition: relative;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\npadding: 0.25rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-bar > button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0;\ndisplay: grid;\nplace-items: center;\nfont-size: 1rem;\nline-height: 1;\n}\n.pen-popover {\nposition: absolute;\nright: calc(100% + 8px);\nbottom: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nmin-width: 155px;\npadding: 0.35rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-popover[hidden] {\ndisplay: none;\n}\n.pen-popover button {\nmin-height: 36px;\npadding: 0 0.65rem;\ntext-align: left;\nfont-size: 0.9rem;\nwhite-space: nowrap;\n}\n.pen-has-toolbar pen-input .pen-tools {\ndisplay: none;\n}\n.pen-pad-btn {\nposition: absolute;\nright: 6px;\nz-index: 4;\nmin-width: 32px;\nmin-height: 32px;\npadding: 0 0.45rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.95rem;\nline-height: 1;\ncursor: pointer;\n}\n.pen-more-in {\nbottom: 6px;\nfont-weight: 700;\n}\n.pen-pin-in {\ntop: 6px;\nfont-size: 0.85rem;\n}\n.pen-pin-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\n.inkpad.readonly .pen-pad-btn {\ndisplay: none;\n}\n.pen-pinned {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 28;\ndisplay: flex;\nalign-items: flex-start;\ngap: 0.5rem;\npadding: 0.45rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-pinned-body {\nflex: 1;\nmin-width: 0;\nmax-height: 28vh;\noverflow-y: auto;\nfont-size: 0.95rem;\nline-height: 1.4;\n}\n.pen-pinned-body > :first-child {\nmargin-top: 0;\n}\n.pen-pinned-body > :last-child {\nmargin-bottom: 0;\n}\n.pen-unpin {\nflex: none;\nmin-width: 32px;\nmin-height: 32px;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1rem 0;\n}\n.pen-submit-row {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nalign-items: center;\n}\n.pen-boox-btn {\nfont-size: 0.9rem;\n}\n.pen-boox-file[hidden] {\ndisplay: none;\n}\n.pen-feedback {\nmargin: 0.5rem 0 1rem;\npadding: 0.65rem 0.9rem;\nborder: 1px solid #000;\nborder-left-width: 4px;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nline-height: 1.5;\n}\n.pen-feedback p {\nmargin: 0.35rem 0;\n}\n.pen-badge {\ndisplay: inline-block;\npadding: 0.14rem 0.55rem;\nmargin-bottom: 0.25rem;\nborder: 1px solid #000;\nborder-radius: 999px;\nfont-size: 0.86rem;\nfont-weight: 700;\n}\n.pen-read-line {\nfont-size: 0.92rem;\nopacity: 0.88;\n}\n.pen-md > :first-child {\nmargin-top: 0.2rem;\n}\n.pen-md > :last-child {\nmargin-bottom: 0.2rem;\n}\n.pen-md-h {\nmargin: 0.7rem 0 0.25rem;\nfont-size: 1rem;\nfont-weight: 700;\n}\n.pen-md ul,\n.pen-md ol {\nmargin: 0.35rem 0 0.45rem;\npadding-left: 1.35rem;\n}\n.pen-md li {\nmargin: 0.18rem 0;\n}\n.pen-md blockquote {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.7rem;\nborder-left: 3px solid #000;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-md code {\npadding: 0.08rem 0.3rem;\nborder-radius: 4px;\nbackground: rgb(0 0 0 / 0.07);\nfont-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\nfont-size: 0.9em;\n}\n.pen-code {\nmargin: 0.45rem 0;\npadding: 0.55rem 0.75rem;\noverflow-x: auto;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-radius: 6px;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-code code {\npadding: 0;\nbackground: none;\n}\n.pen-table-wrap {\nmargin: 0.45rem 0;\noverflow-x: auto;\n}\n.pen-md table {\nborder-collapse: collapse;\nwidth: 100%;\nfont-size: 0.92rem;\n}\n.pen-md th,\n.pen-md td {\npadding: 0.32rem 0.55rem;\nborder: 1px solid #000;\ntext-align: left;\n}\n.pen-md th {\nfont-weight: 700;\nbackground: rgb(0 0 0 / 0.05);\n}\n.pen-disclosure {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.65rem;\nborder: 1px dashed #000;\nborder-radius: 6px;\n}\n.pen-disclosure summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-disclosure[open] summary {\nmargin-bottom: 0.3rem;\n}\n.pen-next-time {\nfont-weight: 600;\n}\n.pen-summary-card {\nmargin: 0.65rem 0;\npadding: 0.7rem 0.9rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nmargin: 0.55rem 0;\n}\n.pen-followup {\nmargin-top: 0.75rem;\npadding: 0.7rem 0.85rem;\nborder: 1px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-followup-thread {\ndisplay: flex;\nflex-direction: column;\ngap: 0.5rem;\n}\n.pen-followup-thread:not(:empty) {\nmargin-bottom: 0.6rem;\n}\n.pen-followup-msg {\npadding: 0.45rem 0.65rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 8px;\n}\n.pen-followup-student {\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-followup-who {\ndisplay: block;\nfont-size: 0.78rem;\nfont-weight: 700;\ntext-transform: uppercase;\nletter-spacing: 0.03em;\nopacity: 0.75;\nmargin-bottom: 0.15rem;\n}\n.pen-followup-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\n}\n.pen-followup-input {\nflex: 1 1 14rem;\nmin-width: 0;\nmin-height: 40px;\npadding: 0 0.65rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-followup-status {\nmargin: 0.35rem 0 0;\nfont-size: 0.88rem;\n}\n.pen-grader-backdrop {\nposition: fixed;\ninset: 0;\nz-index: 60;\ndisplay: grid;\nplace-items: center;\npadding: 1rem;\nbackground: rgb(0 0 0 / 0.5);\n}\n.pen-grader-card {\nwidth: min(440px, 100%);\npadding: 1rem 1.1rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.65rem;\n}\n.pen-grader-head {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\n}\n.pen-grader-note {\nmargin: 0;\nfont-size: 0.88rem;\nline-height: 1.4;\n}\n.pen-grader-label {\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-grader-label[hidden] {\ndisplay: none;\n}\n.pen-grader-field {\nmin-height: 38px;\npadding: 0.35rem 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-weight: 400;\n}\n.pen-grader-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nmargin-top: 0.2rem;\n}\n.pen-grader-actions .pen-send {\nmin-height: 38px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\ncursor: pointer;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #ffffff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.35) calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px));\n}\nhtml.pen-dark body {\nbackground: #111317 !important;\ncolor: #e6e8ec !important;\n}\nhtml.pen-dark .pen-bar,\nhtml.pen-dark .pen-popover,\nhtml.pen-dark .pen-pinned,\nhtml.pen-dark .pen-feedback,\nhtml.pen-dark .pen-summary-card,\nhtml.pen-dark .pen-followup,\nhtml.pen-dark .pen-grader-card,\nhtml.pen-dark .pen-sheet-card,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar,\nhtml[data-darkreader-scheme=\"dark\"] .pen-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pinned {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-followup-input,\nhtml.pen-dark .pen-grader-field,\nhtml.pen-dark .pen-disclosure,\nhtml.pen-dark .pen-badge {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-md code,\nhtml.pen-dark .pen-code,\nhtml.pen-dark .pen-md blockquote,\nhtml.pen-dark .pen-md th,\nhtml.pen-dark .pen-followup-student {\nbackground: rgb(255 255 255 / 0.06) !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-pad-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pad-btn {\nbackground: rgb(28 31 38 / 0.9) !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button,\nhtml.pen-dark .pen-unpin,\nhtml.pen-dark .pen-sheet-btn,\nhtml.pen-dark .pen-boox-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button,\nhtml[data-darkreader-scheme=\"dark\"] .pen-unpin,\nhtml[data-darkreader-scheme=\"dark\"] .pen-boox-btn {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button[aria-pressed=\"true\"],\nhtml.pen-dark .pen-pin-in[aria-pressed=\"true\"],\nhtml.pen-dark pen-submit .pen-send,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-pin-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] pen-submit .pen-send {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n.pen-sheet-card {\nmargin-top: 0.75rem;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-sheet-head {\ndisplay: flex;\nalign-items: baseline;\njustify-content: space-between;\ngap: 0.5rem;\nfont-size: 1.05rem;\n}\n.pen-sheet-count {\nfont-size: 0.85rem;\npadding: 0.15rem 0.5rem;\nborder: 1px solid #000;\nborder-radius: 999px;\n}\n.pen-sheet-msg {\nmargin: 0.4rem 0 0.65rem;\nfont-size: 0.92rem;\n}\n.pen-sheet-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nmargin-bottom: 0.6rem;\n}\n.pen-sheet-btn {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.75rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\ntext-decoration: none;\ncursor: pointer;\n}\n.pen-sheet-btn[hidden] {\ndisplay: none;\n}\n.pen-sheet-skipped {\nmargin: 0.25rem 0 0.6rem;\nfont-size: 0.88rem;\n}\n.pen-sheet-item {\nmargin: 0.7rem 0;\npadding-top: 0.5rem;\nborder-top: 1px solid #000;\n}\n.pen-sheet-item-head {\nfont-weight: 700;\nfont-size: 0.95rem;\nmargin-bottom: 0.3rem;\n}\n.pen-sheet-typed {\nmargin: 0.25rem 0 0.4rem;\nwhite-space: pre-wrap;\n}\n.pen-sheet-fig {\nmargin: 0.35rem 0 0;\n}\n.pen-sheet-fig img {\ndisplay: block;\nmax-width: 100%;\nborder: 1px solid #000;\nborder-radius: 6px;\n}\n.pen-sheet-details {\nmargin-top: 0.65rem;\n}\n.pen-sheet-details summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 32px;\n}\n@media print {\npen-toolbar,\n.pen-tools,\n.pen-pad-btn,\n.pen-pinned,\n.pen-sheet-actions,\n.pen-save,\n.pen-boox-btn,\n.pen-followup-form,\n.pen-feedback-actions,\n.pen-grader-backdrop,\npen-submit .pen-send {\ndisplay: none !important;\n}\n.pen-has-toolbar body {\npadding-right: 0 !important;\n}\n}";
 const WORDS = {
 exportFailed: "Your handwriting could not be prepared for hand-in. Your work is still here: keep writing or try handing in again.",
 correct: "✓ Correct",
@@ -2461,6 +2871,14 @@ whatDidYouWrite: "What did you write?",
 checkAgain: "Check again",
 lookingAgain: "Looking again…",
 recheckFailed: "Your correction could not be checked. Your text is still here: edit it or try again.",
+nudge: "💡 Hint / guiding question",
+solution: "📖 Worked solution",
+showAnswer: "📖 Show answer",
+followUpPlaceholder: "Ask a follow-up question or explain your fix…",
+followUpSend: "Ask tutor",
+followUpThinking: "Thinking…",
+copyForAi: "📋 Copy for AI",
+graderSetup: "🤖 Grader setup",
 };
 function word(key) {
 try {
@@ -2566,28 +2984,45 @@ statusBox()?.replaceChildren(...nodes.filter((n) => n != null && n !== false));
 function showFeedback() {
 document.querySelectorAll(".pen-feedback").forEach((el) => el.remove());
 if (!graded) return;
-for (const [name, g] of Object.entries(graded.grades)) {
+for (const [name, g] of Object.entries(graded.grades ?? {})) {
 const pen = penInputs().find((p) => p.name === name);
 const anchor = pen ?? controls(name).at(-1);
 if (!anchor) continue;
 pen?.pad.setMarks(graded.marks?.[name] ?? []);
 const after = anchor.closest("label") ?? anchor;
+const heading = g.badge
+? h("span", { class: "pen-badge", "data-verdict": g.verdict || undefined }, g.badge)
+: g.verdict
+? h("strong", { class: "pen-verdict", "data-verdict": g.verdict }, word(g.verdict))
+: null;
+const bodyText = g.feedback || g.comment;
 after.after(
 h(
 "div",
-{ class: "pen-feedback", "data-for": name },
-h("strong", {}, word(g.verdict)),
-g.readAs ? h("p", {}, `${word("read")} `, rich(g.readAs, "pen-inline"), pen && tutorAvailable("auto") ? [" ", misreadButton(name)] : null) : null,
-g.comment ? rich(g.comment) : null,
-g.nextTime ? h("p", {}, "👉 ", rich(g.nextTime, "pen-inline")) : null,
-g.correctAnswer ? h("p", {}, `${word("answer")} `, rich(g.correctAnswer, "pen-inline")) : null,
+{ class: "pen-feedback", "data-for": name, "data-verdict": g.verdict || undefined },
+heading,
+g.readAs ? h("p", { class: "pen-read-line" }, `${word("read")} `, rich(g.readAs, "pen-inline"), pen && tutorAvailable("auto") ? [" ", misreadButton(name)] : null) : null,
+bodyText ? richMarkdown(bodyText, "pen-md") : null,
+g.nudge ? h("details", { class: "pen-disclosure pen-nudge" }, h("summary", {}, word("nudge")), richMarkdown(g.nudge, "pen-md")) : null,
+g.solution
+? h("details", { class: "pen-disclosure pen-solution" }, h("summary", {}, word("solution")), richMarkdown(g.solution, "pen-md"))
+: g.correctAnswer
+? g.nudge
+? h("details", { class: "pen-disclosure pen-solution" }, h("summary", {}, word("showAnswer")), richMarkdown(g.correctAnswer, "pen-md"))
+: h("p", {}, `${word("answer")} `, rich(g.correctAnswer, "pen-inline"))
+: null,
+g.nextTime ? h("p", { class: "pen-next-time" }, "👉 ", rich(g.nextTime, "pen-inline")) : null,
 ),
 );
 }
-status(graded.summary ? rich(graded.summary) : "", h("button", { type: "button", class: "pen-again", onclick: reopen }, word("again")));
+const reportNode = graded.markdown ? h("div", { class: "pen-feedback pen-feedback-report" }, richMarkdown(graded.markdown, "pen-md")) : null;
+const summaryNode = graded.summary ? h("div", { class: "pen-summary-card" }, richMarkdown(graded.summary, "pen-md pen-summary")) : null;
+const actionsRow = h("div", { class: "pen-feedback-actions" }, h("button", { type: "button", class: "pen-again", onclick: reopen }, word("again")));
+const followUp = tutorAvailable("auto") ? followUpPanel() : null;
+status(reportNode, summaryNode, actionsRow, followUp);
 lock(true);
 document.querySelectorAll("pen-submit .pen-send").forEach((b) => (b.hidden = true));
-document.dispatchEvent(new CustomEvent("pen-feedback", { detail: { grades: graded.grades, summary: graded.summary } }));
+document.dispatchEvent(new CustomEvent("pen-feedback", { detail: { grades: graded.grades, summary: graded.summary, markdown: graded.markdown || "" } }));
 }
 function misreadButton(name) {
 return h("button", { type: "button", class: "pen-misread", onclick: (e) => e.target.closest(".pen-feedback").append(misreadForm(name)) }, word("notWhatIWrote"));
@@ -2646,6 +3081,7 @@ return form;
 function reopen() {
 run++;
 graded = null;
+followUps = [];
 for (const p of penInputs()) p.pad.setMarks([]);
 showFeedback();
 status();
@@ -2769,6 +3205,23 @@ const answered = items.filter((it) => it.inks.length || (it.typed && String(it.t
 const skipped = items.filter((it) => !answered.includes(it));
 const slug = (document.title || "answers").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "answers";
 const copyBtn = h("button", { type: "button", class: "pen-sheet-btn", disabled: true }, "📋 Copy answer sheet");
+const copyPromptBtn =
+typeof buildAiHandoffPrompt === "function"
+? h(
+"button",
+{
+type: "button",
+class: "pen-sheet-btn",
+onclick: async () => {
+try {
+await navigator.clipboard.writeText(buildAiHandoffPrompt(items));
+copyPromptBtn.textContent = "✓ Prompt copied!";
+} catch {}
+},
+},
+"📝 Copy coaching prompt",
+)
+: null;
 const dlLink = h("a", { class: "pen-sheet-btn pen-sheet-link", download: `${slug}-answers.png`, hidden: true }, "⬇ Download PNG");
 const printBtn = h("button", { type: "button", class: "pen-sheet-btn", onclick: () => window.print() }, "🖨 Print / PDF");
 const combinedPreview = h("div", { class: "pen-sheet-combined" });
@@ -2798,7 +3251,7 @@ h("strong", {}, "Answer sheet"),
 h("span", { class: "pen-sheet-count" }, `${answered.length} of ${items.length} answered`),
 ),
 h("p", { class: "pen-sheet-msg" }, message),
-h("div", { class: "pen-sheet-actions" }, copyBtn, dlLink, printBtn),
+h("div", { class: "pen-sheet-actions" }, copyBtn, copyPromptBtn, dlLink, printBtn),
 skipped.length
 ? h("p", { class: "pen-sheet-skipped" }, `Unanswered: ${skipped.map((it) => it.label || it.q.id).join(", ")}`)
 : null,
@@ -2859,12 +3312,22 @@ const request = pageRequest({ ...meta, items });
 const submission = { ...meta, items: items.map(({ q, label, typed, inks }) => ({ id: q.id, label, typed, images: inks })) };
 const reply = await askClaude(request, { maxTokens: Math.min(12000, 2500 + 700 * items.length), reuse: true, stillWanted: () => mine === run, expects: expectsGrades(items), submission });
 if (mine !== run) return null;
-const { grades, summary } = normalizeGrades(parseReply(reply), items.map((it) => it.q));
+let parsed;
+try {
+parsed = parseReply(reply);
+} catch (parseErr) {
+const rawText = typeof reply === "string" ? reply.trim() : "";
+if (!rawText) throw parseErr;
+parsed = { markdown: rawText, questions: [], summary: "" };
+}
+const normalized = normalizeGrades(parsed, items.map((it) => it.q));
+const { grades, summary } = normalized;
+const markdown = normalized.markdown || parsed?.markdown || "";
 const marks = {};
 for (const it of items) {
 if (grades[it.q.id] && it.inks.length) marks[it.q.id] = marksToPaper(grades[it.q.id].marks, it.inks).get(it.q.id) ?? [];
 }
-graded = { grades, summary, marks };
+graded = { grades, summary, marks, ...(markdown ? { markdown } : {}) };
 showFeedback();
 save();
 return graded;
@@ -2880,6 +3343,229 @@ return null;
 }
 watchDevice();
 watchForNewQuiz();
+let followUps = [];
+function followUpPanel() {
+const thread = h("div", { class: "pen-followup-thread" });
+const renderThread = () => {
+thread.replaceChildren(
+...followUps.map((m) =>
+h(
+"div",
+{ class: `pen-followup-msg pen-followup-${m.role}` },
+h("span", { class: "pen-followup-who" }, m.role === "student" ? "You" : tutorName()),
+m.role === "student" ? h("p", {}, m.text) : richMarkdown(m.text, "pen-md"),
+),
+),
+);
+};
+renderThread();
+const input = h("input", { type: "text", class: "pen-followup-input", placeholder: word("followUpPlaceholder") });
+const sendBtn = h("button", { type: "submit", class: "pen-followup-send" }, word("followUpSend"));
+const note = h("p", { class: "pen-followup-status", role: "status", hidden: true });
+const original = graded;
+const generation = run;
+let busy = false;
+const form = h(
+"form",
+{
+class: "pen-followup-form",
+onsubmit: async (e) => {
+e.preventDefault();
+if (busy || graded !== original || run !== generation) return;
+const q = input.value.trim();
+if (!q) return input.focus();
+busy = input.readOnly = sendBtn.disabled = true;
+const prior = [...followUps];
+followUps.push({ role: "student", text: q });
+input.value = "";
+renderThread();
+note.hidden = false;
+note.textContent = word("followUpThinking");
+try {
+const gradedFields = Object.entries(graded?.grades ?? {}).map(([id, g]) => ({
+id,
+badge: g.badge,
+verdict: g.verdict,
+readAs: g.readAs,
+comment: g.feedback || g.comment,
+}));
+const req = followUpRequest({
+title: document.title,
+pageText: pageText(),
+gradedSummary: graded?.summary || "",
+gradedMarkdown: graded?.markdown || "",
+gradedFields,
+question: q,
+history: prior,
+lang: pageLang(),
+feedbackLang: feedbackLang(),
+});
+const answer = await askClaude(req, { maxTokens: 2000, stillWanted: () => graded === original && run === generation });
+if (graded !== original || run !== generation) return;
+followUps.push({ role: "tutor", text: String(answer).trim() });
+note.hidden = true;
+renderThread();
+} catch (err) {
+if (graded !== original || run !== generation) return;
+followUps.pop();
+input.value = q;
+renderThread();
+note.hidden = false;
+note.textContent = `Could not reach ${tutorName()} (${String(err?.message || "offline").slice(0, 100)}). Try again.`;
+} finally {
+if (graded === original && run === generation) busy = input.readOnly = sendBtn.disabled = false;
+}
+},
+},
+input,
+sendBtn,
+);
+return h("div", { class: "pen-followup" }, thread, form, note);
+}
+function buildAiHandoffPrompt(items) {
+const answered = items.filter((it) => it.inks.length || (it.typed && String(it.typed).trim()));
+const fieldLines = items
+.map((it) => {
+const name = it.label ? `${it.q.id} (${it.label})` : it.q.id;
+const typed = it.typed?.trim() ? ` — typed: ${it.typed.trim()}` : "";
+const state = it.inks.length ? " [handwritten in image]" : typed ? "" : " [blank]";
+return `- ${name}${typed}${state}`;
+})
+.join("\n");
+return [
+`I completed this handwritten worksheet: "${document.title || "Worksheet"}" (${answered.length} of ${items.length} answered).`,
+"Please review my attached answer sheet image as a thoughtful teacher:",
+"1. First transcribe what I actually wrote verbatim (mistakes included — don't silently fix errors).",
+"2. Give clear, educational coaching for each question: praise what works, diagnose any misconception, and guide me with a concrete next step or Socratic question before giving away a full worked solution.",
+"3. End with a short summary of what clicked and the one thing to practise next.",
+"",
+"Worksheet context:",
+pageText().slice(0, 3500),
+"",
+"Fields:",
+fieldLines,
+].join("\n");
+}
+async function exportForAI() {
+let items;
+try {
+items = fields();
+} catch {
+status(h("p", { role: "alert" }, word("exportFailed")));
+return null;
+}
+if (!items.some((it) => it.inks.length || it.typed)) {
+status(h("p", {}, word("empty")));
+return null;
+}
+showToPass(
+items,
+"Ready for ChatGPT, Gemini, Claude, or any AI tutor: copy the answer sheet image (or download PNG) and optionally copy the coaching prompt below.",
+);
+return items;
+}
+function openGraderSetup() {
+if (isArtifactHost()) return;
+document.getElementById("pen-grader-backdrop")?.remove();
+const savedCfg = savedGraderConfig();
+const providerSel = h(
+"select",
+{ class: "pen-grader-field" },
+h("option", { value: "auto", selected: !savedCfg.provider || savedCfg.provider === "auto" }, "Auto (page / local agent)"),
+h("option", { value: "openai", selected: savedCfg.provider === "openai" }, "OpenAI (ChatGPT API)"),
+h("option", { value: "gemini", selected: savedCfg.provider === "gemini" }, "Google Gemini API"),
+h("option", { value: "anthropic", selected: savedCfg.provider === "anthropic" }, "Anthropic (Claude API)"),
+h("option", { value: "endpoint", selected: savedCfg.provider === "endpoint" }, "Custom endpoint URL"),
+);
+const keyInput = h("input", {
+type: "password",
+class: "pen-grader-field",
+placeholder: "Paste API key (stored only in this browser)",
+value: savedCfg.apiKey || "",
+});
+const endpointInput = h("input", {
+type: "url",
+class: "pen-grader-field",
+placeholder: "https://your-grader.example.com/grade",
+value: savedCfg.endpoint || "",
+});
+const modelInput = h("input", {
+type: "text",
+class: "pen-grader-field",
+placeholder: "Optional model override",
+value: savedCfg.model || "",
+});
+const keyRow = h("label", { class: "pen-grader-label" }, "API Key", keyInput);
+const endpointRow = h("label", { class: "pen-grader-label" }, "Endpoint URL", endpointInput);
+const modelRow = h("label", { class: "pen-grader-label" }, "Model (optional)", modelInput);
+const syncFields = () => {
+const p = providerSel.value;
+const isApi = p === "openai" || p === "gemini" || p === "anthropic";
+keyRow.hidden = !isApi;
+modelRow.hidden = !isApi;
+endpointRow.hidden = p !== "endpoint";
+if (isApi) modelInput.placeholder = `Default: ${PROVIDER_MODELS[p] || ""}`;
+};
+providerSel.addEventListener("change", syncFields);
+syncFields();
+const close = () => backdrop.remove();
+const form = h(
+"form",
+{
+class: "pen-grader-card",
+onsubmit: (e) => {
+e.preventDefault();
+const p = providerSel.value;
+if (p === "auto") {
+saveGraderConfig(null);
+} else if (p === "endpoint") {
+saveGraderConfig({ provider: "endpoint", endpoint: endpointInput.value.trim() });
+} else {
+saveGraderConfig({ provider: p, apiKey: keyInput.value.trim(), model: modelInput.value.trim() });
+}
+refreshTools();
+close();
+},
+},
+h("div", { class: "pen-grader-head" }, h("strong", {}, "AI Grader Setup"), h("button", { type: "button", class: "pen-unpin", onclick: close, title: "Close" }, "✕")),
+h("p", { class: "pen-grader-note" }, "Connect your own ChatGPT, Gemini, Claude API key, or a custom grading server. Keys stay strictly in your browser's localStorage."),
+h("label", { class: "pen-grader-label" }, "Provider", providerSel),
+keyRow,
+endpointRow,
+modelRow,
+h(
+"div",
+{ class: "pen-grader-actions" },
+h("button", { type: "submit", class: "pen-send" }, "Save"),
+h(
+"button",
+{
+type: "button",
+class: "pen-sheet-btn",
+onclick: () => {
+saveGraderConfig(null);
+refreshTools();
+close();
+},
+},
+"Reset to Auto",
+),
+),
+);
+const backdrop = h(
+"div",
+{
+id: "pen-grader-backdrop",
+class: "pen-grader-backdrop",
+onclick: (e) => {
+if (e.target === backdrop) close();
+},
+},
+form,
+);
+document.body.append(backdrop);
+providerSel.focus();
+}
 whenAgentAway((away) => {
 document.querySelector(".pen-away")?.remove();
 if (away) {
@@ -2956,6 +3642,10 @@ document.querySelectorAll("pen-input .pen-eraser, pen-toolbar .pen-eraser").forE
 document.querySelectorAll("pen-toolbar .pen-eink").forEach((b) => b.setAttribute("aria-pressed", String(calm())));
 document.querySelectorAll("pen-toolbar .pen-dark-btn").forEach((b) => b.setAttribute("aria-pressed", String(isDark())));
 document.querySelectorAll("pen-toolbar .pen-fingers").forEach((b) => (b.textContent = word(fingersDraw() ? "fingerDraws" : "fingerScrolls")));
+const byok = activeByok();
+document.querySelectorAll("pen-toolbar .pen-grader-menu").forEach((b) => {
+b.textContent = byok ? `🤖 Grader: ${tutorName()}` : word("graderSetup");
+});
 document.querySelectorAll("pen-toolbar .pen-cog").forEach((b) => b.setAttribute("aria-expanded", String(menuOpen)));
 document.querySelectorAll("pen-toolbar .pen-popover").forEach((p) => (p.hidden = !menuOpen));
 for (const p of penInputs()) {
@@ -3021,6 +3711,8 @@ menuBtn("pen-eink", word("eInk"), toggleEink),
 menuBtn("pen-dark-btn", word("dark"), toggleDark),
 menuBtn("pen-fingers", word(fingersDraw() ? "fingerDraws" : "fingerScrolls"), toggleFingers),
 menuBtn("pen-boox-menu", word("booxPdf"), () => ((menuOpen = false), refreshTools(), downloadBooxPdf())),
+menuBtn("pen-ai-menu", word("copyForAi"), () => ((menuOpen = false), refreshTools(), exportForAI())),
+!isArtifactHost() ? menuBtn("pen-grader-menu", word("graderSetup"), () => ((menuOpen = false), refreshTools(), openGraderSetup())) : null,
 menuBtn("pen-clear", word("clear"), clearPad),
 ),
 ),
@@ -3253,8 +3945,18 @@ expects: expectsGrades(items),
 submission,
 });
 if (mine !== run) return null;
-const { grades, summary } = normalizeGrades(parseReply(reply), items.map((it) => it.q));
-graded = { grades, summary, marks: {} };
+let parsed;
+try {
+parsed = parseReply(reply);
+} catch (parseErr) {
+const rawText = typeof reply === "string" ? reply.trim() : "";
+if (!rawText) throw parseErr;
+parsed = { markdown: rawText, questions: [], summary: "" };
+}
+const normalized = normalizeGrades(parsed, items.map((it) => it.q));
+const { grades, summary } = normalized;
+const markdown = normalized.markdown || parsed?.markdown || "";
+graded = { grades, summary, marks: {}, ...(markdown ? { markdown } : {}) };
 showFeedback();
 save();
 return graded;
@@ -3290,6 +3992,7 @@ h(
 h("button", { type: "button", class: "pen-send", disabled: inputsLocked, hidden: Boolean(graded), onclick: handIn }, text),
 h("button", { type: "button", class: "pen-boox-btn", title: "Download A4 worksheet PDF to write in your notes app", onclick: downloadBooxPdf }, word("booxPdf")),
 h("button", { type: "button", class: "pen-boox-btn", title: "Upload your filled PDF or PNG pages for grading", onclick: () => fileInput.click() }, word("booxUpload")),
+h("button", { type: "button", class: "pen-boox-btn", title: "Export answer sheet PNG + coaching prompt for ChatGPT, Gemini, or Claude", onclick: exportForAI }, word("copyForAi")),
 fileInput,
 ),
 h("div", { class: "pen-status" }),
@@ -3303,6 +4006,8 @@ handIn,
 reopen,
 downloadBooxPdf,
 gradeFiles,
+exportForAI,
+openGraderSetup,
 configure: configureTutor,
 canGrade: () => tutorAvailable("auto"),
 ask: (text) => askClaude([{ type: "text", text }, ...pageRequest.images(fields())]),

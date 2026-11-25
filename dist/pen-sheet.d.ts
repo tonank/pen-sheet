@@ -32,11 +32,15 @@ export interface RedPenMark {
 }
 
 export interface FieldGrade {
-  verdict: "correct" | "partial" | "incorrect" | "blank";
+  verdict?: "correct" | "partial" | "incorrect" | "blank" | "";
+  badge?: string;
   points?: number;
   readAs?: string;
   readUnsure?: boolean;
   comment?: string;
+  feedback?: string;
+  nudge?: string;
+  solution?: string;
   correctAnswer?: string;
   nextTime?: string;
   marks?: RedPenMark[];
@@ -44,26 +48,45 @@ export interface FieldGrade {
 
 export interface GradeResponse {
   summary?: string;
+  markdown?: string;
   grades?: Record<string, FieldGrade>;
   questions?: Array<FieldGrade & { id: string }>;
   reply?: string;
 }
+
+export type GradingMode = "coach" | "free" | "strict";
+export type GraderProvider = "auto" | "openai" | "anthropic" | "gemini" | "endpoint";
 
 export interface PenSheetConfig {
   endpoint?: string | null;
   headers?: Record<string, string> | null;
   agentName?: string | null;
   timeoutMs?: number;
+  mode?: GradingMode | null;
+  prompt?: string | null;
+  provider?: GraderProvider | null;
+  apiKey?: string | null;
+  model?: string | null;
+  maxImagesPerCall?: number | null;
   grader?: ((payload: { content: unknown[]; submission: PenSubmission | null; expects: unknown }) => Promise<GradeResponse | string> | GradeResponse | string) | null;
+}
+
+export interface GradeResult {
+  grades: Record<string, FieldGrade>;
+  summary: string;
+  markdown?: string;
+  marks: Record<string, unknown[]>;
 }
 
 export interface PenSheetAPI {
   configure(opts: PenSheetConfig): PenSheetConfig;
   canGrade(): boolean;
-  handIn(): Promise<{ grades: Record<string, FieldGrade>; summary: string; marks: Record<string, unknown[]> } | null>;
+  handIn(): Promise<GradeResult | null>;
   reopen(): void;
   downloadBooxPdf(): Promise<Blob | null>;
-  gradeFiles(files: FileList | File[]): Promise<{ grades: Record<string, FieldGrade>; summary: string; marks: Record<string, unknown[]> } | null>;
+  gradeFiles(files: FileList | File[]): Promise<GradeResult | null>;
+  exportForAI(): Promise<Array<{ q: { id: string; points: number }; label: string; typed?: string; inks: PenImage[] }> | null>;
+  openGraderSetup(): void;
   ask(prompt: string): Promise<string>;
   fields(): Array<{ q: { id: string; points: number }; label: string; typed?: string; inks: PenImage[] }>;
   InkPad: unknown;
@@ -78,6 +101,6 @@ declare global {
   interface Window {
     PenSheet?: PenSheetAPI;
     PenInput?: PenSheetAPI;
-    penSheetConfig?: Pick<PenSheetConfig, "endpoint" | "headers" | "agentName">;
+    penSheetConfig?: Pick<PenSheetConfig, "endpoint" | "headers" | "agentName" | "mode" | "prompt" | "provider" | "apiKey" | "model">;
   }
 }

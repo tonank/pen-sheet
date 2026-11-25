@@ -1,10 +1,30 @@
 # pen-sheet
 
-Zero-dependency **e-ink & stylus worksheet Web Components** (`<pen-toolbar>`, `<pen-input>`, `<pen-submit>`) built for Onyx Boox, iPad, Surface, and any browser — with red-pen teacher markup and pluggable server/API/agent grading modes.
+**Turn any AI into a real handwritten notebook tutor.**
 
-## Quick start (CDN — works on any HTTPS web page)
+Zero-dependency **e-ink & stylus worksheet Web Components** (`<pen-toolbar>`, `<pen-input>`, `<pen-submit>`) engineered for **Onyx Boox**, **iPad + Apple Pencil**, **Surface**, and any browser — with **educational Socratic coaching**, progressive-disclosure hints & solutions, interactive follow-up Q&A, red-pen markup, native PDF/Notes round-trip, and cross-AI compatibility (**Claude, ChatGPT, Gemini, Codex**).
 
-Live HTTPS e-ink demo (try it on an Onyx Boox / iPad / Surface): **https://tonank.github.io/pen-sheet/**
+👉 **Live HTTPS e-ink demo (try it on your tablet right now):** https://tonank.github.io/pen-sheet/
+
+---
+
+## Why `pen-sheet`?
+
+Typing math, proofs, diagrams, and language drills into chat boxes hides how a learner actually thinks. `pen-sheet` lets any AI — or any teacher — ship a single HTML file where students **write naturally with a pen** and get **thoughtful, educational coaching** right on their work:
+
+- **🎓 Pedagogical freedom (not a rigid 4-verdict box):** By default (`mode="coach"`), the AI teaches however helps best — Socratic guiding questions, misconception diagnosis, rich Markdown (`$math$`, `$$display math$$`, code blocks, tables, lists), custom mastery badges, collapsible **💡 Hint** and **📖 Worked solution** toggles so answers aren't spoiled before thinking, and an **interactive follow-up tutor box** right under the feedback. (Prefer classic 4-verdict scoring? Set `<pen-submit mode="strict">`, or `<pen-submit mode="free">` for pure teacher letters.)
+- **✍️ Hardware-grade stylus & e-ink engine:** Pure black-on-white e-ink mode (`html.hwq-eink`), zero animations/ghosting, `pointerrawupdate` + `navigator.ink` low-latency trails over HTTPS, batched single-call rendering, palm rejection (fingers scroll automatically once a stylus is seen), barrel/eraser button, scribble-to-erase, draw-and-hold straight lines, auto-growing paper, and drawable inline SVG diagrams.
+- **📄 Native PDF / Notes app round-trip:** Prefer writing in **Onyx Boox NeoReader/Notes**, **iPad GoodNotes**, or **reMarkable**? Tap **📄 Download PDF** (pure JS, zero deps, crisp Unicode + SVG + grid/ruled A4 PDF), write natively with zero latency, then tap **📎 Upload PDF / PNG** to grade it right back on the page.
+- **🤖 Works with every AI (Claude, ChatGPT, Gemini, Codex):**
+  - **Claude Artifacts:** In-page grading works out of the box with built-in **>4-image auto-batching** (handles 6–12+ handwritten boxes or multi-page PNG uploads automatically).
+  - **BYOK zero-backend mode:** Open any HTML worksheet locally or on GitHub Pages, tap **⚙ → 🤖 Grader setup**, and connect your own **OpenAI (ChatGPT)**, **Google Gemini**, **Anthropic (Claude)** API key, or custom endpoint URL — keys stay strictly in browser `localStorage`.
+  - **One-tap `📋 Copy for AI`:** Export a crisp combined Answer Sheet PNG + ready-to-paste coaching prompt from any sheet (even inside a Claude Artifact) to hand off to ChatGPT, Gemini, or Claude.
+  - **ChatGPT Custom GPT / Project:** Copy-paste [examples/chatgpt-instructions.md](./examples/chatgpt-instructions.md) into a ChatGPT Project or Gemini Gem.
+- **🖍 Red-pen markup & misread recovery:** SVG ticks, crosses, circles, underlines, and notes placed directly on the student's strokes, plus verbatim *"I read:"* transcription with one-click *"That's not what I wrote"* re-checking.
+
+---
+
+## Quick start (CDN — 10 lines of HTML)
 
 ```html
 <!doctype html>
@@ -12,90 +32,51 @@ Live HTTPS e-ink demo (try it on an Onyx Boox / iPad / Surface): **https://tonan
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Quick Math Check</title>
+  <title>Linear Equations Practice</title>
 </head>
 <body>
   <pen-toolbar></pen-toolbar>
-  <h1>Quick Math Check</h1>
-  <p>Solve 3(x − 4) = 15:</p>
-  <pen-input name="q1" paper="grid" height="420"></pen-input>
-  <pen-submit endpoint="https://your-grader.workers.dev/grade" agent="Teacher">Ready</pen-submit>
+  <h1>Linear Equations Practice</h1>
+
+  <p>1. Solve 3(x − 4) = 15 and show every step:</p>
+  <pen-input name="q1" label="Solve 3(x - 4) = 15" paper="grid" height="420"></pen-input>
+
+  <pen-submit prompt="Use Socratic hints first before showing the worked solution.">Hand in for coaching</pen-submit>
   <script src="https://cdn.jsdelivr.net/gh/tonank/pen-sheet@main/dist/pen-sheet.js"></script>
 </body>
 </html>
 ```
 
-## Install as an Agent Skill
+## Install as an Agent Skill (Claude Code, Codex, Antigravity, Gemini CLI)
 
 ```sh
-# Claude Code / Codex / Antigravity (via skills CLI)
 npx skills add tonank/pen-sheet
 ```
+
 Or copy [SKILL.md](./SKILL.md) into `~/.claude/skills/pen-sheet/SKILL.md` (or `~/.codex/skills/pen-sheet/SKILL.md`).
+Using ChatGPT or Gemini? Paste [examples/chatgpt-instructions.md](./examples/chatgpt-instructions.md) into a Project / Custom GPT / Gem.
 
-## Features tuned for real stylus & e-ink hardware
+---
 
-- **E-ink / Onyx Boox ready**: pure black-on-white mode (`html.hwq-eink`), no animations/ghosting, batched single-call stroke rendering, and no `desynchronized: true` (which causes invisible ink on Android/Boox EPD compositors).
-- **HTTPS low-latency ink**: over HTTPS, automatically uses `navigator.ink` (Delegated Ink Trails) and full-rate `getCoalescedEvents()`.
-- **Palm rejection & pen ergonomics**: fingers scroll automatically once a stylus is seen; barrel button / eraser end erases; scribble-to-erase; draw-and-hold to straighten lines; auto-growing paper.
-- **Red-pen teacher markup**: SVG ticks, crosses, circles, underlines, and notes rendered directly on top of the student's handwriting.
-- **Native PDF / Notes app round-trip**: tap **`📄 Download PDF`** to generate a clean multi-page A4 worksheet PDF (100% pure JS, zero dependencies, full Unicode/SVG/grid/ruled support), write in any native notes/PDF app (Boox NeoReader/Notes, iPad GoodNotes, reMarkable, etc.), then tap **`📎 Upload PDF / PNG`** to upload the filled file and grade it right on the page.
-- **Autosave & recovery**: strokes and typed inputs persist in `localStorage` (or Claude artifact storage) across reloads.
+## Grading Modes & Connections
 
-## Dedicated Server Modes
-
-One library powers every grading workflow:
-
-### 1. Hosted API Server (Option A — public URL, zero login)
-Point `<pen-submit endpoint="https://...">` (or `PenSheet.configure({ endpoint, headers })`) at any grading endpoint — see [examples/cloudflare-worker.js](./examples/cloudflare-worker.js) for a drop-in Cloudflare Worker (Anthropic or Gemini), or run locally with your API key:
-
-```sh
-ANTHROPIC_API_KEY=sk-... npx pen-sheet serve examples/notebook-test.html --mode api
-```
-
-### 2. Live Agent Server (Option B — your coding agent acts as the teacher)
-Serve any HTML worksheet locally (or expose over HTTPS with `tailscale funnel 8765` to unlock `navigator.ink` on Boox):
-
-```sh
-npx pen-sheet serve examples/notebook-test.html --mode agent
-npx pen-sheet wait  examples/notebook-test.html
-npx pen-sheet reply examples/notebook-test.html <request-id> reply.json
-```
-
-### 3. Custom JS Grader
-```js
-PenSheet.configure({
-  agentName: "Teacher",
-  grader: async ({ submission }) => ({
-    summary: "Nice work!",
-    grades: { q1: { verdict: "correct", readAs: "x = 9", comment: "Spot on." } },
-  }),
-});
-```
-
-### 4. Standalone / Claude Artifact (zero external scripts)
-```sh
-npx pen-sheet inline examples/notebook-test.html -o standalone.html
-```
+| Mode / Connection | How to use |
+|---|---|
+| **Coaching mode (default)** | `<pen-submit>` or `<pen-submit mode="coach" prompt="...">` — rich Markdown, custom badges, collapsible `nudge` & `solution`, follow-up Q&A. Accepts flexible JSON **or** free-form Markdown. |
+| **Free-form teacher letter** | `<pen-submit mode="free">` — pure Markdown coaching with no JSON wrapper. |
+| **Classic strict scoring** | `<pen-submit mode="strict">` — 4 verdicts (`correct`, `partial`, `incorrect`, `blank`). |
+| **BYOK (OpenAI / Gemini / Claude)** | Tap **⚙ → 🤖 Grader setup** in any browser (or `PenSheet.configure({ provider: "openai", apiKey: "sk-..." })`). |
+| **Hosted HTTPS API (Option A)** | `<pen-submit endpoint="https://your-grader.workers.dev/grade">` — drop-in Cloudflare Worker in [examples/cloudflare-worker.js](./examples/cloudflare-worker.js), or local: `ANTHROPIC_API_KEY=sk-... npx pen-sheet serve sheet.html --mode api`. |
+| **Live Agent Server (Option B)** | `npx pen-sheet serve sheet.html --mode agent` → `npx pen-sheet wait sheet.html` → `npx pen-sheet reply sheet.html <id> reply.json`. |
+| **Standalone / Claude Artifact** | `npx pen-sheet inline sheet.html -o standalone.html` — embeds the entire runtime into one self-contained HTML file. |
+| **Custom JS Grader** | `PenSheet.configure({ agentName: "Teacher", grader: async ({ submission }) => ({ summary: "...", grades: { ... } }) })`. |
 
 ## Server JSON Contract
 
-`POST <endpoint>` receives:
-```json
-{
-  "content": [{ "type": "text", "text": "..." }, { "type": "image", "source": { "type": "base64", "media_type": "image/png", "data": "..." } }],
-  "submission": {
-    "title": "Notebook Stylus Test",
-    "pageText": "...",
-    "items": [{ "id": "q1", "label": "...", "images": [{ "id": "q1", "png": "data:image/png;base64,...", "box": [0, 0, 1000, 420] }] }]
-  }
-}
-```
-
-Respond with **any** of:
-- Direct grades: `{ "summary": "...", "grades": { "q1": { "verdict": "correct", "readAs": "...", "comment": "...", "marks": [...] } } }`
-- Raw model reply: `{ "reply": "{\"questions\":[...],\"summary\":\"...\"}" }`
-- Async polling job: `{ "id": "...", "pollUrl": "/.../poll/..." }` (polled until grades/reply are ready)
+`POST <endpoint>` receives `{ content, submission }`. Respond with **any** of:
+- Flexible coaching grades: `{ "summary": "...", "grades": { "q1": { "badge": "Strong intuition", "verdict": "partial", "readAs": "...", "feedback": "...", "nudge": "...", "solution": "...", "marks": [...] } } }`
+- Raw model reply (JSON or plain Markdown): `{ "reply": "..." }`
+- Async polling job: `{ "id": "...", "pollUrl": "/.../poll/..." }`
 
 ## License
 
