@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en" class="hwq-eink">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Calculus & Mechanics Practice Sheet</title>
+  <style>
+    body { max-width: 840px; margin: 0 auto; padding: 0 1rem 3rem; font-family: system-ui, -apple-system, sans-serif; line-height: 1.5; background: #fff; color: #000; }
+    section { margin: 1.4rem 0; }
+    h2 { font-size: 1.06rem; margin: 0 0 0.3rem; }
+    p { margin: 0.25rem 0 0.5rem; }
+  </style>
+</head>
+<body>
+  <pen-toolbar></pen-toolbar>
+  <pen-header subtitle="Guided STEM practice · Hints available when stuck; show units and vector directions." student-name></pen-header>
+
+  <section>
+    <h2>1. Differentiate with the Chain Rule: f(x) = ln(3x² + 5)</h2>
+    <p>Show the outer/inner decomposition and simplify your final derivative.</p>
+    <pen-input
+      name="q1"
+      label="Chain rule derivative"
+      points="3"
+      rubric="Identify outer ln(u) and inner u = 3x²+5 | Multiply by du/dx = 6x | Write simplified fraction"
+      hint="Let $u = 3x^2 + 5$. Remember $\\frac{d}{dx}[\\ln(u)] = \\frac{1}{u} \\cdot u'$."
+      paper="grid"
+      height="380"
+      confidence
+    ></pen-input>
+  </section>
+
+  <section>
+    <h2>2. Free-Body Diagram on an Inclined Plane</h2>
+    <p>A block of mass <em>m</em> rests on a rough ramp at angle θ without sliding. Draw and label <strong>all three forces</strong> (weight <em>mg</em>, normal force <em>N</em>, static friction <em>f<sub>s</sub></em>) directly on the diagram, and state the component of gravity parallel to the ramp.</p>
+    <pen-input
+      name="q2"
+      label="Inclined plane FBD"
+      points="4"
+      rubric="Weight mg straight down | Normal force N perpendicular to ramp | Friction fs up the ramp | Parallel component mg sin(θ)"
+      hint="Gravity always points straight toward the center of the Earth — NOT perpendicular to the ramp!"
+      confidence
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 300">
+        <line x1="40" y1="255" x2="520" y2="255" stroke="#000" stroke-width="2.5"/>
+        <line x1="70" y1="255" x2="480" y2="75" stroke="#000" stroke-width="2.5"/>
+        <line x1="480" y1="75" x2="480" y2="255" stroke="#000" stroke-width="1.5" stroke-dasharray="6 5"/>
+        <path d="M 145 255 A 75 75 0 0 0 138 225" fill="none" stroke="#000" stroke-width="2"/>
+        <text x="158" y="246" font-family="serif" font-size="22" font-style="italic">θ</text>
+        <g transform="translate(275,165) rotate(-23.7)">
+          <rect x="-42" y="-52" width="84" height="52" fill="#fff" stroke="#000" stroke-width="2.5"/>
+          <circle cx="0" cy="-26" r="4" fill="#000"/>
+          <text x="10" y="-20" font-family="serif" font-size="20" font-style="italic">m</text>
+        </g>
+      </svg>
+    </pen-input>
+  </section>
+
+  <section>
+    <h2>3. Spot the Flaw in This Integration</h2>
+    <p>A classmate wrote: <em>∫ (1 / x²) dx = ln(x²) + C</em>. Explain why this fails (check by differentiating!) and write the correct antiderivative.</p>
+    <pen-input
+      name="q3"
+      label="Integration misconception"
+      points="3"
+      rubric="Differentiate ln(x²) to show it gives 2/x, not 1/x² | Rewrite 1/x² as x⁻² | Apply power rule to get -1/x + C"
+      paper="grid"
+      height="380"
+      confidence
+    ></pen-input>
+  </section>
+
+  <pen-submit agent="STEM Tutor">Hand in for coaching</pen-submit>
+  <script src="../dist/pen-sheet.js"></script>
+</body>
+</html>

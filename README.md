@@ -4,7 +4,11 @@
 
 Zero-dependency **e-ink & stylus worksheet Web Components** (`<pen-toolbar>`, `<pen-input>`, `<pen-submit>`) engineered for **Onyx Boox**, **iPad + Apple Pencil**, **Surface**, and any browser — with **educational Socratic coaching**, progressive-disclosure hints & solutions, interactive follow-up Q&A, red-pen markup, native PDF/Notes round-trip, and cross-AI compatibility (**Claude, ChatGPT, Gemini, Codex**).
 
-👉 **Live HTTPS e-ink demo (try it on your tablet right now):** https://tonank.github.io/pen-sheet/
+👉 **Live HTTPS e-ink demos (try on your Onyx Boox, iPad, or desktop right now):**
+- **[Interactive Stylus Showcase](https://tonank.github.io/pen-sheet/)** — algebra, explanation, number-line SVG, rubrics, hints, confidence calibration & Focus mode
+- **[Algorithms & Recurrences Midterm](https://tonank.github.io/pen-sheet/examples/algorithms-midterm.html)** — 25-min timed mock exam with Merge Sort tree, Coin Change DP table SVG & binary search bug hunt
+- **[Calculus & Mechanics Practice](https://tonank.github.io/pen-sheet/examples/calculus-physics.html)** — chain rule, inclined-plane Free-Body Diagram SVG & integration misconception
+- **[German A2/B1 Writing Journal](https://tonank.github.io/pen-sheet/examples/language-journal.html)** — target-language writing with English coaching (`data-feedback-lang="en"`)
 
 ---
 
@@ -12,7 +16,8 @@ Zero-dependency **e-ink & stylus worksheet Web Components** (`<pen-toolbar>`, `<
 
 Typing math, proofs, diagrams, and language drills into chat boxes hides how a learner actually thinks. `pen-sheet` lets any AI — or any teacher — ship a single HTML file where students **write naturally with a pen** and get **thoughtful, educational coaching** right on their work:
 
-- **🎓 Pedagogical freedom (not a rigid 4-verdict box):** By default (`mode="coach"`), the AI teaches however helps best — Socratic guiding questions, misconception diagnosis, rich Markdown (`$math$`, `$$display math$$`, code blocks, tables, lists), custom mastery badges, collapsible **💡 Hint** and **📖 Worked solution** toggles so answers aren't spoiled before thinking, and an **interactive follow-up tutor box** right under the feedback. (Prefer classic 4-verdict scoring? Set `<pen-submit mode="strict">`, or `<pen-submit mode="free">` for pure teacher letters.)
+- **🎓 Pedagogical freedom & test authoring:** Declare `points`, `rubric` criteria checklists, offline progressive `hint`s, and optional exam `timer`s directly on HTML tags. By default (`mode="coach"`), the AI teaches however helps best — Socratic guiding questions, misconception diagnosis, rich Markdown (`$math$`, `$$display math$$`, code blocks, tables, lists), custom mastery badges, rubric ticks, collapsible **💡 Hint** and **📖 Worked solution** toggles, and an **interactive follow-up tutor box** right under the feedback. (Prefer classic 4-verdict scoring? Set `<pen-submit mode="strict">`, or `<pen-submit mode="free">` for pure teacher letters.)
+- **🧭 Exam-taker & post-exam review workflow:** Dockable left/right floating toolbar (with live ink color dot, nib sizes, and per-pad `Ruled / Grid / Blank` switcher), Question Navigator with progress bar and quick-jump (`Next flagged / unanswered / to review`), `⚑` question flags, inline pre-submit guard for unanswered/flagged items, post-grading scorecard (`pts`, `%`, elapsed time), `All / Needs work / ⚑ Flagged` review filters, **`↻ Retry missed`** (keeps correct work locked while revising only missed items with previous feedback tucked neatly underneath), and 1-tap **`📝 Copy study notes`** / **`⬇ Save report (.md)`**.
 - **✍️ Hardware-grade stylus & e-ink engine:** Pure black-on-white e-ink mode (`html.hwq-eink`), zero animations/ghosting, `pointerrawupdate` + `navigator.ink` low-latency trails over HTTPS, batched single-call rendering, palm rejection (fingers scroll automatically once a stylus is seen), barrel/eraser button, scribble-to-erase, draw-and-hold straight lines, auto-growing paper, and drawable inline SVG diagrams.
 - **📄 Native PDF / Notes app round-trip:** Prefer writing in **Onyx Boox NeoReader/Notes**, **iPad GoodNotes**, or **reMarkable**? Tap **📄 Download PDF** (pure JS, zero deps, crisp Unicode + SVG + grid/ruled A4 PDF), write natively with zero latency, then tap **📎 Upload PDF / PNG** to grade it right back on the page.
 - **🤖 Works with every AI (Claude, ChatGPT, Gemini, Codex):**

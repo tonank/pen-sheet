@@ -222,6 +222,14 @@ this.interrupt({ keepTouch: true });
 this.#clearHover();
 }
 }
+setPaper(paper) {
+if (this.destroyed || this.figure) return;
+const next = paper === "grid" || paper === "blank" ? paper : "ruled";
+if (this.paper === next) return;
+this.el.classList.remove(`paper-${this.paper}`);
+this.paper = next;
+this.el.classList.add(`paper-${next}`);
+}
 interrupt({ keepTouch = false } = {}) {
 if (!this.active) return;
 const { pointerId, pointerType } = this.active;
@@ -2158,13 +2166,17 @@ text: 'Reply with only a JSON object: {"reply": "...", "solid": true | false}\n-
 });
 return blocks;
 }
-function coachingShape({ mode, dispute, withMarks = true, customPrompt = "" }) {
+function coachingShape({ mode, dispute, withMarks = true, customPrompt = "", hasPoints = false, hasRubric = false }) {
 const extra = customPrompt ? `\n\nAuthor's specific coaching instructions (follow closely):\n${customPrompt}` : "";
+const ptsField = hasPoints ? ', "points": <number>' : "";
+const metField = hasRubric ? ', "met": [1, 2]' : "";
+const ptsNote = hasPoints ? "\n- points: points earned for this field, up to its stated max points (half-points like 2.5 are fine)." : "";
+const metNote = hasRubric ? "\n- met: 1-based numbers of the rubric criteria the student's work clearly satisfies." : "";
 if (mode === "strict") {
 return `Reply with only a JSON object:
-{"questions": [{"id": "<the field's name>", "readAs": "...", "verdict": "correct" | "partial" | "incorrect" | "blank", "comment": "...", "correctAnswer": "...", "nextTime": "..."${withMarks ? ', "marks": [...]' : ""}}]${dispute ? "" : ', "summary": "..."'}}
+{"questions": [{"id": "<the field's name>", "readAs": "...", "verdict": "correct" | "partial" | "incorrect" | "blank"${ptsField}${metField}, "comment": "...", "correctAnswer": "...", "nextTime": "..."${withMarks ? ', "marks": [...]' : ""}}]${dispute ? "" : ', "summary": "..."'}}
 One entry per field. A field that only records a preference or a name is "correct" with no comment. "blank" is for nothing written, or nothing that's an answer yet (test strokes, a scribble): say what you need from them, without giving the answer away.
-- readAs: your transcription of the handwriting, exactly as written; [?] for anything you can't make out. A field with an image always has something written, even if it isn't an answer yet ("[a scribble]").
+- readAs: your transcription of the handwriting, exactly as written; [?] for anything you can't make out. A field with an image always has something written, even if it isn't an answer yet ("[a scribble]").${ptsNote}${metNote}
 - comment: one or two specific sentences about their work.
 - correctAnswer and nextTime: only for a mistake.
 ${dispute ? "" : "- summary: two or three sentences: how it went and the one thing to practise next.\n"}${withMarks ? `- ${MARKS_HELP}` : ""}${extra}`;
@@ -2180,10 +2192,10 @@ Structure your feedback however teaches best for this student's work:
 return `You are a thoughtful, world-class tutor — not a rigid grading script. Choose the pedagogical approach that helps this student learn most from their actual attempt (Socratic guiding questions, misconception diagnosis, step-by-step walkthrough, rubric breakdown, mastery label, score, or brief confirmation when solid).
 You may reply in EITHER:
 1. Flexible JSON (recommended when giving field-by-field feedback anchored under each answer box):
-{"questions": [{"id": "<field name>", "readAs": "...", "badge": "...", "verdict": "correct" | "partial" | "incorrect" | "blank", "feedback": "...", "nudge": "...", "solution": "...", "nextTime": "..."${withMarks ? ', "marks": [...]' : ""}}]${dispute ? "" : ', "summary": "..."'}}
+{"questions": [{"id": "<field name>", "readAs": "...", "badge": "...", "verdict": "correct" | "partial" | "incorrect" | "blank"${ptsField}${metField}, "feedback": "...", "nudge": "...", "solution": "...", "nextTime": "..."${withMarks ? ', "marks": [...]' : ""}}]${dispute ? "" : ', "summary": "..."'}}
 - readAs: verbatim transcription of what was handwritten (mistakes included, [?] for illegible marks; "" if nothing handwritten).
 - badge (optional): a short human label in your own words if helpful (e.g. "Solid proof", "Good setup — check base case", "8/10", "Thoughtful draft").
-- verdict (optional): "correct" | "partial" | "incorrect" | "blank" when a standard status fits; omit for open reflections or preference fields.
+- verdict (optional): "correct" | "partial" | "incorrect" | "blank" when a standard status fits; omit for open reflections or preference fields.${ptsNote}${metNote}
 - feedback: rich Markdown coaching (as concise or detailed as genuinely helpful — bullet steps, $math$, $$display math$$, code blocks, or tables). Praise specific reasoning; when something is off, explain *why* and build from their own work.
 - nudge (optional, shown collapsed so the student can think first): a Socratic question or gentle clue before revealing the answer.
 - solution (optional, shown collapsed behind a toggle): a clean worked solution or model answer when seeing the full fix helps.
@@ -2191,6 +2203,9 @@ You may reply in EITHER:
 ${dispute ? "" : "- summary: rich Markdown big-picture synthesis — what clicked, the core idea to sharpen, and one suggested next step.\n"}${withMarks ? `- ${MARKS_HELP}\n` : ""}2. OR plain rich Markdown directly (no JSON wrapper) if a holistic teacher letter fits this worksheet better.${extra}`;
 }
 function pageRequest({ title, pageText, items, lang, feedbackLang, dispute = null, mode = gradingMode(), prompt = gradingPrompt() }) {
+const hasPoints = items.some(({ q }) => q?.showPoints || (Number(q?.points) > 1));
+const hasRubric = items.some(({ q }) => Array.isArray(q?.rubric) && q.rubric.length > 0);
+const hasConfidence = items.some((it) => Boolean(it.confidence));
 return [
 {
 type: "text",
@@ -2198,24 +2213,39 @@ text: [
 `A student handed in their work on this page: "${title}".`,
 `What the page says:\n${quote(pageText)}`,
 "Read every handwritten image carefully first: transcribe what the student actually wrote (mistakes included, never silently correcting errors) before responding.",
+...(hasConfidence
+? ["Where the student rated their confidence (guess / unsure / sure), be especially clear and kind about confident mistakes (the highest-value learning moments) and briefly confirm why right guesses worked."]
+: []),
 common(lang, feedbackLang),
 ...(dispute
 ? [`The student says you misread their handwriting in this field. In their words, they wrote: ${quote(dispute)}. Re-read the image. If their reading plausibly matches what is written, assess that; if not, assess what you see and explain kindly what you read.`]
 : []),
 ].join("\n\n"),
 },
-...items.flatMap(({ q, label, typed, inks = [] }) => [
-{ type: "text", text: `## Field "${q.id}"${label ? ` (${label})` : ""}${typed !== undefined ? `\nTyped or chosen: ${typed ? quote(typed) : "(nothing)"}` : ""}${typed === undefined && !inks.length ? "\n(No handwriting.)" : ""}` },
-...inkBlocks(inks),
-]),
+...items.flatMap(({ q, label, typed, confidence, inks = [] }) => {
+const pts = hasPoints && Number(q?.points) > 0 ? ` — ${q.points} pt${q.points === 1 ? "" : "s"}` : "";
+const rubricLines = Array.isArray(q?.rubric) && q.rubric.length
+? `\nRubric criteria (shown to student):\n${q.rubric.map((c, k) => `  ${k + 1}. ${c}`).join("\n")}`
+: "";
+const confLine = confidence ? `\nStudent's confidence: ${confidence}` : "";
+return [
 {
 type: "text",
-text: coachingShape({ mode, dispute, withMarks: true, customPrompt: prompt }),
+text: `## Field "${q.id}"${label ? ` (${label})` : ""}${pts}${rubricLines}${typed !== undefined ? `\nTyped or chosen: ${typed ? quote(typed) : "(nothing)"}` : ""}${typed === undefined && !inks.length ? "\n(No handwriting.)" : ""}${confLine}`,
+},
+...inkBlocks(inks),
+];
+}),
+{
+type: "text",
+text: coachingShape({ mode, dispute, withMarks: true, customPrompt: prompt, hasPoints, hasRubric }),
 },
 ];
 }
 pageRequest.images = (items) => items.flatMap(({ inks = [] }) => inkBlocks(inks));
 function documentPageRequest({ title, pageText, items, files, lang, feedbackLang, mode = gradingMode(), prompt = gradingPrompt() }) {
+const hasPoints = items.some(({ q }) => q?.showPoints || (Number(q?.points) > 1));
+const hasRubric = items.some(({ q }) => Array.isArray(q?.rubric) && q.rubric.length > 0);
 const fileBlocks = files.flatMap((f, idx) => {
 const data = f.dataUrl.slice(f.dataUrl.indexOf(",") + 1);
 const isPdf = f.mediaType === "application/pdf";
@@ -2226,13 +2256,20 @@ isPdf
 : { type: "image", source: { type: "base64", media_type: f.mediaType || "image/png", data } },
 ];
 });
+const fieldList = items
+.map(({ q, label }) => {
+const pts = hasPoints && Number(q?.points) > 0 ? ` [${q.points} pt${q.points === 1 ? "" : "s"}]` : "";
+const rub = Array.isArray(q?.rubric) && q.rubric.length ? `\n  Rubric: ${q.rubric.map((c, k) => `${k + 1}) ${c}`).join("; ")}` : "";
+return `- "${q.id}"${label ? ` (${label})` : ""}${pts}${rub}`;
+})
+.join("\n");
 return [
 {
 type: "text",
 text: [
 `A student completed this worksheet in a PDF or notes app and uploaded the filled pages: "${title}".`,
 `What the page asks:\n${quote(pageText)}`,
-`Fields on this page (each answer box in the PDF is tagged with [field id]):\n${items.map(({ q, label }) => `- "${q.id}"${label ? ` (${label})` : ""}`).join("\n")}`,
+`Fields on this page (each answer box in the PDF is tagged with [field id]):\n${fieldList}`,
 "Read the student's handwriting from the attached PDF/images carefully. Transcribe each answer verbatim (mistakes included, [?] for anything illegible) before responding.",
 common(lang, feedbackLang),
 ].join("\n\n"),
@@ -2240,7 +2277,7 @@ common(lang, feedbackLang),
 ...fileBlocks,
 {
 type: "text",
-text: coachingShape({ mode, dispute: null, withMarks: false, customPrompt: prompt }),
+text: coachingShape({ mode, dispute: null, withMarks: false, customPrompt: prompt, hasPoints, hasRubric }),
 },
 ];
 }
@@ -2710,7 +2747,9 @@ ctx.lineWidth = 2;
 ctx.strokeRect(x, y, w, h);
 ctx.restore();
 }
-async function exportWorksheetPdf({ title = "Stylus Worksheet", subtitle = "", fields = [] }) {
+async function exportWorksheetPdf({ title = "Stylus Worksheet", subtitle = "", studentName = "", fields = [] }) {
+const hasExplicitPoints = fields.some((f) => Number(f.points) > 0);
+const totalPoints = hasExplicitPoints ? fields.reduce((acc, f) => acc + (Number(f.points) > 0 ? Number(f.points) : 0), 0) : 0;
 const pages = [];
 const makePage = (pageNum) => {
 const canvas = document.createElement("canvas");
@@ -2733,7 +2772,16 @@ for (const line of wrapLines(ctx, note, "20px system-ui, sans-serif", INNER_W)) 
 ctx.fillText(line, MARGIN, y + 20);
 y += 28;
 }
-y += 14;
+y += 10;
+ctx.fillStyle = "#222222";
+ctx.font = "19px system-ui, sans-serif";
+const nameStr = studentName?.trim() ? studentName.trim().slice(0, 36) : "__________________________";
+const dateStr = studentName?.trim() ? new Date().toLocaleDateString() : "______________";
+const metaLine = totalPoints > 0
+? `Name: ${nameStr}    Date: ${dateStr}    Score: _____ / ${totalPoints}`
+: `Name: ${nameStr}    Date: ${dateStr}`;
+ctx.fillText(metaLine, MARGIN, y + 20);
+y += 34;
 ctx.strokeStyle = "#000000";
 ctx.lineWidth = 2;
 ctx.beginPath();
@@ -2754,9 +2802,13 @@ let cur = makePage(1);
 const bottomLimit = PAGE_H - MARGIN - 30;
 for (let i = 0; i < fields.length; i++) {
 const f = fields[i];
+const ptsBadge = Number(f.points) > 0 ? `[${f.points} pt${Number(f.points) === 1 ? "" : "s"}]` : "";
+const headMaxW = ptsBadge ? INNER_W - 120 : INNER_W;
 const headText = f.heading || `${i + 1}. ${f.name}`;
-const headLines = wrapLines(cur.ctx, headText, "bold 24px system-ui, sans-serif", INNER_W);
+const headLines = wrapLines(cur.ctx, headText, "bold 24px system-ui, sans-serif", headMaxW);
 const promptLines = f.prompt ? wrapLines(cur.ctx, f.prompt, "21px system-ui, sans-serif", INNER_W) : [];
+const rubricText = Array.isArray(f.rubric) && f.rubric.length ? f.rubric.map((c) => `☐ ${c}`).join("   ") : "";
+const rubricLines = rubricText ? wrapLines(cur.ctx, rubricText, "18px system-ui, sans-serif", INNER_W) : [];
 let figImg = null;
 if (f.figureSvg) {
 try {
@@ -2769,7 +2821,11 @@ try {
 inkImg = await loadImage(f.existingPng);
 } catch {}
 }
-const headerH = headLines.length * 32 + (promptLines.length ? promptLines.length * 28 + 8 : 0) + 10;
+const headerH =
+headLines.length * 32 +
+(promptLines.length ? promptLines.length * 28 + 8 : 0) +
+(rubricLines.length ? rubricLines.length * 24 + 8 : 0) +
+10;
 const rawBoxH = figImg
 ? Math.max(320, Math.round((INNER_W * figImg.naturalHeight) / Math.max(1, figImg.naturalWidth)) + 80)
 : Math.max(300, Math.min(820, Math.round((Number(f.height) || 400) * 1.1)));
@@ -2782,9 +2838,18 @@ const { ctx } = cur;
 let y = cur.y;
 ctx.fillStyle = "#000000";
 ctx.font = "bold 24px system-ui, sans-serif";
+const headTopY = y;
 for (const line of headLines) {
 ctx.fillText(line, MARGIN, y + 24);
 y += 32;
+}
+if (ptsBadge) {
+ctx.save();
+ctx.font = "bold 20px system-ui, sans-serif";
+ctx.fillStyle = "#333333";
+const pw = ctx.measureText(ptsBadge).width;
+ctx.fillText(ptsBadge, MARGIN + INNER_W - pw, headTopY + 23);
+ctx.restore();
 }
 if (promptLines.length) {
 ctx.fillStyle = "#111111";
@@ -2794,6 +2859,15 @@ if (line) ctx.fillText(line, MARGIN, y + 20);
 y += 28;
 }
 y += 6;
+}
+if (rubricLines.length) {
+ctx.fillStyle = "#444444";
+ctx.font = "18px system-ui, sans-serif";
+for (const line of rubricLines) {
+if (line) ctx.fillText(line, MARGIN, y + 18);
+y += 24;
+}
+y += 8;
 }
 drawPaperBox(ctx, MARGIN, y, INNER_W, boxH, figImg ? "blank" : f.paper || "ruled");
 if (figImg) {
@@ -2833,7 +2907,7 @@ const { InkPad, fingersDraw, tools } = __mod_ink;
 const { watchDevice } = __mod_device;
 const { exportWorksheetPdf } = __mod_pdf;
 const { activeByok, askClaude, configureTutor, documentPageRequest, expectsGrades, followUpRequest, isArtifactHost, marksToPaper, normalizeGrades, pageRequest, parseReply, PROVIDER_MODELS, localAgent, reportProgress, savedGraderConfig, saveGraderConfig, tutorAvailable, tutorName, watchForNewQuiz, whenAgentAway } = __mod_tutor;
-const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #ffffff;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\nposition: relative;\nz-index: 1;\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.inkpad .predict {\nz-index: 2;\n}\n.inkpad .marks {\nz-index: 3;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\nz-index: 0;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.28) calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad,\nhtml.pen-dark .inkpad {\nbackground-color: #17191e !important;\nborder-color: #323742 !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-ruled,\nhtml.pen-dark .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.12) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-grid,\nhtml.pen-dark .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad canvas,\nhtml[data-darkreader-scheme=\"dark\"] .inkpad .figure-bg,\nhtml.pen-dark .inkpad canvas,\nhtml.pen-dark .inkpad .figure-bg {\nfilter: invert(0.92) hue-rotate(180deg);\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks path,\nhtml.pen-dark .marks path {\nstroke: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks text,\nhtml.pen-dark .marks text {\nfill: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks .mark-note,\nhtml.pen-dark .marks .mark-note {\ncolor: #fca5a5;\ntext-shadow: 0 0 4px #17191e, 0 0 4px #17191e, 0 0 4px #17191e;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\n.pen-sr {\nposition: absolute;\nwidth: 1px;\nheight: 1px;\noverflow: hidden;\nclip-path: inset(50%);\nwhite-space: nowrap;\n}\npen-toolbar {\nposition: fixed;\nright: 6px;\ntop: 50%;\ntransform: translateY(-50%);\nz-index: 30;\n}\n.pen-has-toolbar body {\npadding-right: 54px;\n}\n.pen-bar {\nposition: relative;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\npadding: 0.25rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-bar > button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0;\ndisplay: grid;\nplace-items: center;\nfont-size: 1rem;\nline-height: 1;\n}\n.pen-bar > .pen-nav-btn {\nfont-size: 0.72rem;\nfont-weight: 700;\nletter-spacing: -0.02em;\npadding: 0 0.25rem;\n}\n.pen-bar > .pen-nav-btn[hidden],\n.pen-bar > .pen-timer-pill[hidden] {\ndisplay: none;\n}\n.pen-bar > .pen-timer-pill {\nmin-height: 26px;\nfont-size: 0.68rem;\nfont-variant-numeric: tabular-nums;\nfont-weight: 600;\npadding: 0 0.2rem;\n}\n.pen-bar > .pen-timer-pill.pen-timer-low {\nbackground: #b91c1c;\ncolor: #fff;\nborder-color: #b91c1c;\n}\n.pen-nav-popover {\nposition: absolute;\nright: calc(100% + 8px);\ntop: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nwidth: min(260px, calc(100vw - 74px));\nmax-height: 62vh;\noverflow-y: auto;\npadding: 0.45rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-nav-popover[hidden] {\ndisplay: none;\n}\n.pen-nav-head {\nfont-size: 0.82rem;\ntext-transform: uppercase;\nletter-spacing: 0.04em;\nopacity: 0.72;\npadding: 0.1rem 0.25rem 0.2rem;\n}\n.pen-nav-list {\ndisplay: flex;\nflex-direction: column;\ngap: 0.22rem;\n}\n.pen-nav-item {\ndisplay: flex;\nalign-items: center;\ngap: 0.45rem;\nmin-height: 36px;\npadding: 0.2rem 0.55rem;\ntext-align: left;\nfont-size: 0.86rem;\n}\n.pen-nav-icon {\nflex: none;\nwidth: 1.1em;\ntext-align: center;\nfont-weight: 700;\n}\n.pen-nav-text {\nflex: 1;\nmin-width: 0;\noverflow: hidden;\ntext-overflow: ellipsis;\nwhite-space: nowrap;\n}\n.pen-nav-pts {\nflex: none;\nfont-size: 0.74rem;\nopacity: 0.7;\n}\n.pen-ink-controls {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.4rem;\npadding: 0.15rem 0.1rem;\n}\n.pen-swatches,\n.pen-nibs {\ndisplay: flex;\ngap: 0.28rem;\nalign-items: center;\n}\n.pen-popover .pen-swatch {\nmin-width: 28px;\nmin-height: 28px;\npadding: 0;\nborder-radius: 999px;\nbackground: var(--swatch, #1f2937);\nborder: 2px solid transparent;\nbox-shadow: inset 0 0 0 2px #fff;\n}\n.pen-popover .pen-swatch[aria-pressed=\"true\"] {\nborder-color: #000;\nbackground: var(--swatch, #1f2937);\n}\n.pen-popover .pen-nib {\nmin-width: 28px;\nmin-height: 28px;\npadding: 0;\ntext-align: center;\nfont-size: 0.78rem;\nfont-weight: 700;\n}\n.pen-timer-row {\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-timer-row .pen-timer-toggle {\nflex: 1;\n}\n.pen-timer-row .pen-timer-reset {\nflex: none;\nmin-width: 34px;\npadding: 0;\ntext-align: center;\n}\n.pen-timer-row .pen-timer-reset[hidden] {\ndisplay: none;\n}\n.pen-menu-sep {\nborder: none;\nborder-top: 1px solid rgb(0 0 0 / 0.18);\nmargin: 0.15rem 0;\n}\n.pen-popover {\nposition: absolute;\nright: calc(100% + 8px);\nbottom: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nmin-width: 190px;\npadding: 0.4rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-popover[hidden] {\ndisplay: none;\n}\n.pen-popover button {\nmin-height: 36px;\npadding: 0 0.65rem;\ntext-align: left;\nfont-size: 0.9rem;\nwhite-space: nowrap;\n}\n.pen-has-toolbar pen-input .pen-tools {\ndisplay: none;\n}\n.inkpad.pen-pad-active {\nborder-color: #000;\nbox-shadow: 0 0 0 1px #000;\n}\n.inkpad.pen-pad-flagged {\nborder-style: dashed;\nborder-width: 2px;\n}\n.inkpad.pen-pad-empty::after {\ncontent: attr(data-empty-hint);\nposition: absolute;\nleft: 12px;\ntop: 10px;\nz-index: 2;\npointer-events: none;\nfont-size: 0.85rem;\ncolor: rgb(100 116 139 / 0.65);\n}\n.inkpad:has(.pen-pad-pts).pen-pad-empty::after {\nleft: 68px;\n}\n.pen-pad-pts {\nposition: absolute;\nleft: 8px;\ntop: 8px;\nz-index: 4;\npointer-events: none;\npadding: 0.12rem 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont-size: 0.74rem;\nfont-weight: 700;\n}\n.pen-pad-top-actions {\nposition: absolute;\ntop: 6px;\nright: 6px;\nz-index: 4;\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-pad-btn {\nmin-width: 32px;\nmin-height: 32px;\npadding: 0 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.45);\nborder-radius: 8px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\nline-height: 1;\ncursor: pointer;\n}\n.pen-more-in {\nposition: absolute;\nright: 6px;\nbottom: 6px;\nz-index: 4;\nfont-weight: 700;\n}\n.pen-pin-in,\n.pen-flag-in {\nfont-size: 0.84rem;\n}\n.pen-pin-in[aria-pressed=\"true\"],\n.pen-flag-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\n.inkpad.readonly .pen-pad-btn,\n.inkpad.readonly .pen-pad-top-actions {\ndisplay: none;\n}\n.pen-pinned {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 28;\ndisplay: flex;\nalign-items: flex-start;\ngap: 0.5rem;\npadding: 0.45rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-pinned-body {\nflex: 1;\nmin-width: 0;\nmax-height: 28vh;\noverflow-y: auto;\nfont-size: 0.95rem;\nline-height: 1.4;\n}\n.pen-pinned-body > :first-child {\nmargin-top: 0;\n}\n.pen-pinned-body > :last-child {\nmargin-bottom: 0;\n}\n.pen-unpin {\nflex: none;\nmin-width: 32px;\nmin-height: 32px;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1.5rem 0 1rem;\n}\n.pen-submit-shell {\ndisplay: flex;\nflex-direction: column;\ngap: 0.55rem;\n}\n.pen-submit-primary {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.65rem;\n}\npen-submit .pen-send {\nmin-height: 44px;\npadding: 0 1.25rem;\nfont-weight: 700;\nfont-size: 1rem;\n}\n.pen-readiness {\nfont-size: 0.88rem;\npadding: 0.22rem 0.6rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 999px;\n}\n.pen-readiness[hidden] {\ndisplay: none;\n}\n.pen-readiness-all {\nfont-weight: 600;\nborder-color: #15803d;\ncolor: #15803d;\n}\n.pen-submit-utils {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nalign-items: center;\n}\n.pen-boox-btn {\nfont-size: 0.84rem;\nmin-height: 32px;\npadding: 0 0.6rem;\nborder-color: rgb(0 0 0 / 0.35);\n}\n.pen-boox-file[hidden] {\ndisplay: none;\n}\n.pen-review-bar {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 0.4rem 0 0.65rem;\npadding: 0.5rem 0.75rem;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-radius: 10px;\nbackground: rgb(0 0 0 / 0.025);\n}\n.pen-review-pills,\n.pen-review-filters {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nalign-items: center;\n}\n.pen-review-pill {\nfont-size: 0.84rem;\nfont-weight: 700;\npadding: 0.16rem 0.55rem;\nborder-radius: 999px;\nborder: 1px solid currentColor;\n}\n.pen-review-pill[data-verdict=\"correct\"] {\ncolor: #15803d;\nbackground: #f0fdf4;\n}\n.pen-review-pill[data-verdict=\"partial\"] {\ncolor: #b45309;\nbackground: #fffbeb;\n}\n.pen-review-pill[data-verdict=\"incorrect\"] {\ncolor: #b91c1c;\nbackground: #fef2f2;\n}\n.pen-review-pill[data-verdict=\"blank\"] {\ncolor: #475569;\nbackground: #f8fafc;\n}\n.pen-filter-btn {\nmin-height: 30px;\npadding: 0 0.6rem;\nfont-size: 0.82rem;\n}\n.pen-filter-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml[data-review-filter=\"needs-work\"] .pen-feedback[data-verdict=\"correct\"] {\nopacity: 0.42;\n}\n.pen-feedback {\nmargin: 0.55rem 0 1.15rem;\npadding: 0.75rem 1rem;\nborder: 1px solid rgb(0 0 0 / 0.22);\nborder-left: 4px solid #1e3a8a;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\nline-height: 1.58;\n}\n.pen-feedback[data-verdict=\"correct\"] {\nborder-left-color: #15803d;\n}\n.pen-feedback[data-verdict=\"partial\"] {\nborder-left-color: #b45309;\n}\n.pen-feedback[data-verdict=\"incorrect\"] {\nborder-left-color: #b91c1c;\n}\n.pen-feedback[data-verdict=\"blank\"] {\nborder-left-color: #475569;\n}\n.pen-feedback p {\nmargin: 0.35rem 0;\n}\n.pen-badge {\ndisplay: inline-block;\npadding: 0.16rem 0.6rem;\nmargin-bottom: 0.3rem;\nborder: 1px solid #1e3a8a;\nborder-radius: 999px;\nbackground: #eff6ff;\ncolor: #1e3a8a;\nfont-size: 0.85rem;\nfont-weight: 700;\n}\n.pen-badge[data-verdict=\"correct\"],\n.pen-verdict[data-verdict=\"correct\"] {\ncolor: #15803d;\nborder-color: #15803d;\nbackground: #f0fdf4;\n}\n.pen-badge[data-verdict=\"partial\"],\n.pen-verdict[data-verdict=\"partial\"] {\ncolor: #b45309;\nborder-color: #b45309;\nbackground: #fffbeb;\n}\n.pen-badge[data-verdict=\"incorrect\"],\n.pen-verdict[data-verdict=\"incorrect\"] {\ncolor: #b91c1c;\nborder-color: #b91c1c;\nbackground: #fef2f2;\n}\n.pen-badge[data-verdict=\"blank\"],\n.pen-verdict[data-verdict=\"blank\"] {\ncolor: #475569;\nborder-color: #475569;\nbackground: #f8fafc;\n}\n.pen-verdict {\ndisplay: inline-block;\npadding: 0.12rem 0.52rem;\nmargin-bottom: 0.25rem;\nborder: 1px solid currentColor;\nborder-radius: 999px;\nfont-size: 0.85rem;\n}\n.pen-read-line {\nfont-size: 0.9rem;\npadding: 0.28rem 0 0.35rem;\nmargin: 0.15rem 0 0.45rem;\nborder-bottom: 1px solid rgb(0 0 0 / 0.1);\ncolor: rgb(0 0 0 / 0.78);\n}\n.pen-md > :first-child {\nmargin-top: 0.2rem;\n}\n.pen-md > :last-child {\nmargin-bottom: 0.2rem;\n}\n.pen-md-h {\nmargin: 0.7rem 0 0.25rem;\nfont-size: 1rem;\nfont-weight: 700;\n}\n.pen-md ul,\n.pen-md ol {\nmargin: 0.35rem 0 0.45rem;\npadding-left: 1.35rem;\n}\n.pen-md li {\nmargin: 0.18rem 0;\n}\n.pen-md blockquote {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.7rem;\nborder-left: 3px solid #000;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-md code {\npadding: 0.08rem 0.3rem;\nborder-radius: 4px;\nbackground: rgb(0 0 0 / 0.07);\nfont-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\nfont-size: 0.9em;\n}\n.pen-code {\nmargin: 0.45rem 0;\npadding: 0.55rem 0.75rem;\noverflow-x: auto;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-radius: 6px;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-code code {\npadding: 0;\nbackground: none;\n}\n.pen-table-wrap {\nmargin: 0.45rem 0;\noverflow-x: auto;\n}\n.pen-md table {\nborder-collapse: collapse;\nwidth: 100%;\nfont-size: 0.92rem;\n}\n.pen-md th,\n.pen-md td {\npadding: 0.32rem 0.55rem;\nborder: 1px solid #000;\ntext-align: left;\n}\n.pen-md th {\nfont-weight: 700;\nbackground: rgb(0 0 0 / 0.05);\n}\n.pen-disclosure {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.65rem;\nborder: 1px dashed #000;\nborder-radius: 6px;\n}\n.pen-disclosure summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-disclosure[open] summary {\nmargin-bottom: 0.3rem;\n}\n.pen-next-time {\nfont-weight: 600;\n}\n.pen-summary-card {\nmargin: 0.65rem 0;\npadding: 0.7rem 0.9rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nmargin: 0.55rem 0;\n}\n.pen-followup {\nmargin-top: 0.75rem;\npadding: 0.7rem 0.85rem;\nborder: 1px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-followup-thread {\ndisplay: flex;\nflex-direction: column;\ngap: 0.5rem;\n}\n.pen-followup-thread:not(:empty) {\nmargin-bottom: 0.6rem;\n}\n.pen-followup-msg {\npadding: 0.45rem 0.65rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 8px;\n}\n.pen-followup-student {\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-followup-who {\ndisplay: block;\nfont-size: 0.78rem;\nfont-weight: 700;\ntext-transform: uppercase;\nletter-spacing: 0.03em;\nopacity: 0.75;\nmargin-bottom: 0.15rem;\n}\n.pen-followup-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\n}\n.pen-followup-input {\nflex: 1 1 14rem;\nmin-width: 0;\nmin-height: 40px;\npadding: 0 0.65rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-followup-status {\nmargin: 0.35rem 0 0;\nfont-size: 0.88rem;\n}\n.pen-grader-backdrop {\nposition: fixed;\ninset: 0;\nz-index: 60;\ndisplay: grid;\nplace-items: center;\npadding: 1rem;\nbackground: rgb(0 0 0 / 0.5);\n}\n.pen-grader-card {\nwidth: min(440px, 100%);\npadding: 1rem 1.1rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.65rem;\n}\n.pen-grader-head {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\n}\n.pen-grader-note {\nmargin: 0;\nfont-size: 0.88rem;\nline-height: 1.4;\n}\n.pen-grader-label {\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-grader-label[hidden] {\ndisplay: none;\n}\n.pen-grader-field {\nmin-height: 38px;\npadding: 0.35rem 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-weight: 400;\n}\n.pen-grader-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nmargin-top: 0.2rem;\n}\n.pen-grader-actions .pen-send {\nmin-height: 38px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\ncursor: pointer;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #ffffff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.35) calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px));\n}\n.hwq-eink .pen-feedback,\n.hwq-eink .pen-badge,\n.hwq-eink .pen-verdict,\n.hwq-eink .pen-review-bar,\n.hwq-eink .pen-review-pill,\n.hwq-eink .pen-readiness,\n.hwq-eink .pen-pad-btn,\n.hwq-eink .pen-pad-pts,\n.hwq-eink .pen-boox-btn {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-read-line {\ncolor: #000;\nborder-bottom-color: #000;\n}\n.hwq-eink .pen-feedback[data-verdict=\"partial\"],\n.hwq-eink .pen-feedback[data-verdict=\"incorrect\"] {\nborder-left-width: 6px;\n}\n.hwq-eink .pen-bar > .pen-timer-pill.pen-timer-low,\n.hwq-eink .pen-filter-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\nhtml.pen-dark body {\nbackground: #111317 !important;\ncolor: #e6e8ec !important;\n}\nhtml.pen-dark .pen-bar,\nhtml.pen-dark .pen-popover,\nhtml.pen-dark .pen-nav-popover,\nhtml.pen-dark .pen-pinned,\nhtml.pen-dark .pen-feedback,\nhtml.pen-dark .pen-summary-card,\nhtml.pen-dark .pen-followup,\nhtml.pen-dark .pen-grader-card,\nhtml.pen-dark .pen-review-bar,\nhtml.pen-dark .pen-sheet-card,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar,\nhtml[data-darkreader-scheme=\"dark\"] .pen-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-nav-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pinned {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-followup-input,\nhtml.pen-dark .pen-grader-field,\nhtml.pen-dark .pen-disclosure,\nhtml.pen-dark .pen-badge,\nhtml.pen-dark .pen-verdict,\nhtml.pen-dark .pen-review-pill,\nhtml.pen-dark .pen-readiness,\nhtml.pen-dark .pen-pad-pts {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-read-line {\ncolor: #b8c0cc !important;\nborder-bottom-color: #363c48 !important;\n}\nhtml.pen-dark .pen-md code,\nhtml.pen-dark .pen-code,\nhtml.pen-dark .pen-md blockquote,\nhtml.pen-dark .pen-md th,\nhtml.pen-dark .pen-followup-student {\nbackground: rgb(255 255 255 / 0.06) !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-pad-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pad-btn {\nbackground: rgb(28 31 38 / 0.9) !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button,\nhtml.pen-dark .pen-unpin,\nhtml.pen-dark .pen-sheet-btn,\nhtml.pen-dark .pen-boox-btn,\nhtml.pen-dark .pen-filter-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button,\nhtml[data-darkreader-scheme=\"dark\"] .pen-unpin,\nhtml[data-darkreader-scheme=\"dark\"] .pen-boox-btn {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button[aria-pressed=\"true\"],\nhtml.pen-dark .pen-pin-in[aria-pressed=\"true\"],\nhtml.pen-dark .pen-flag-in[aria-pressed=\"true\"],\nhtml.pen-dark .pen-filter-btn[aria-pressed=\"true\"],\nhtml.pen-dark pen-submit .pen-send,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-pin-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-flag-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] pen-submit .pen-send {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-popover .pen-swatch {\nbackground: var(--swatch, #1f2937) !important;\nbox-shadow: inset 0 0 0 2px #1c1f26 !important;\n}\nhtml.pen-dark .pen-popover .pen-swatch[aria-pressed=\"true\"] {\nborder-color: #e6e8ec !important;\n}\n.pen-sheet-card {\nmargin-top: 0.75rem;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-sheet-head {\ndisplay: flex;\nalign-items: baseline;\njustify-content: space-between;\ngap: 0.5rem;\nfont-size: 1.05rem;\n}\n.pen-sheet-count {\nfont-size: 0.85rem;\npadding: 0.15rem 0.5rem;\nborder: 1px solid #000;\nborder-radius: 999px;\n}\n.pen-sheet-msg {\nmargin: 0.4rem 0 0.65rem;\nfont-size: 0.92rem;\n}\n.pen-sheet-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nmargin-bottom: 0.6rem;\n}\n.pen-sheet-btn {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.75rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\ntext-decoration: none;\ncursor: pointer;\n}\n.pen-sheet-btn[hidden] {\ndisplay: none;\n}\n.pen-sheet-skipped {\nmargin: 0.25rem 0 0.6rem;\nfont-size: 0.88rem;\n}\n.pen-sheet-item {\nmargin: 0.7rem 0;\npadding-top: 0.5rem;\nborder-top: 1px solid #000;\n}\n.pen-sheet-item-head {\nfont-weight: 700;\nfont-size: 0.95rem;\nmargin-bottom: 0.3rem;\n}\n.pen-sheet-typed {\nmargin: 0.25rem 0 0.4rem;\nwhite-space: pre-wrap;\n}\n.pen-sheet-fig {\nmargin: 0.35rem 0 0;\n}\n.pen-sheet-fig img {\ndisplay: block;\nmax-width: 100%;\nborder: 1px solid #000;\nborder-radius: 6px;\n}\n.pen-sheet-details {\nmargin-top: 0.65rem;\n}\n.pen-sheet-details summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 32px;\n}\n@media print {\npen-toolbar,\n.pen-tools,\n.pen-pad-btn,\n.pen-pad-top-actions,\n.pen-pinned,\n.pen-sheet-actions,\n.pen-save,\n.pen-boox-btn,\n.pen-readiness,\n.pen-submit-utils,\n.pen-review-filters,\n.pen-followup-form,\n.pen-feedback-actions,\n.pen-grader-backdrop,\npen-submit .pen-send {\ndisplay: none !important;\n}\n.inkpad.pen-pad-empty::after {\ncontent: none !important;\n}\n.inkpad,\n.pen-feedback,\n.pen-summary-card {\nbreak-inside: avoid;\npage-break-inside: avoid;\n}\n.pen-has-toolbar body {\npadding-right: 0 !important;\n}\n}";
+const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #ffffff;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\nposition: relative;\nz-index: 1;\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.inkpad .predict {\nz-index: 2;\n}\n.inkpad .marks {\nz-index: 3;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\nz-index: 0;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.28) calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad,\nhtml.pen-dark .inkpad {\nbackground-color: #17191e !important;\nborder-color: #323742 !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-ruled,\nhtml.pen-dark .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.12) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-grid,\nhtml.pen-dark .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad canvas,\nhtml[data-darkreader-scheme=\"dark\"] .inkpad .figure-bg,\nhtml.pen-dark .inkpad canvas,\nhtml.pen-dark .inkpad .figure-bg {\nfilter: invert(0.92) hue-rotate(180deg);\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks path,\nhtml.pen-dark .marks path {\nstroke: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks text,\nhtml.pen-dark .marks text {\nfill: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks .mark-note,\nhtml.pen-dark .marks .mark-note {\ncolor: #fca5a5;\ntext-shadow: 0 0 4px #17191e, 0 0 4px #17191e, 0 0 4px #17191e;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\n.pen-sr {\nposition: absolute;\nwidth: 1px;\nheight: 1px;\noverflow: hidden;\nclip-path: inset(50%);\nwhite-space: nowrap;\n}\npen-toolbar {\nposition: fixed;\nright: 6px;\ntop: 50%;\ntransform: translateY(-50%);\nz-index: 30;\n}\nhtml.pen-rail-left pen-toolbar {\nright: auto;\nleft: 6px;\n}\n.pen-has-toolbar body {\npadding-right: 54px;\n}\nhtml.pen-has-toolbar.pen-rail-left body {\npadding-right: 0;\npadding-left: 54px;\n}\n.pen-bar {\nposition: relative;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\npadding: 0.25rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-bar > button {\nposition: relative;\nmin-height: 36px;\nmin-width: 36px;\npadding: 0;\ndisplay: grid;\nplace-items: center;\nfont-size: 1rem;\nline-height: 1;\n}\n.pen-ink-dot {\nposition: absolute;\nright: 4px;\nbottom: 4px;\nwidth: 7px;\nheight: 7px;\nborder-radius: 999px;\nbackground: var(--active-ink, #1f2937);\nborder: 1px solid #fff;\npointer-events: none;\n}\n.pen-bar > .pen-nav-btn {\nfont-size: 0.72rem;\nfont-weight: 700;\nletter-spacing: -0.02em;\npadding: 0 0.25rem;\n}\n.pen-bar > .pen-nav-btn[hidden],\n.pen-bar > .pen-timer-pill[hidden] {\ndisplay: none;\n}\n.pen-bar > .pen-timer-pill {\nmin-height: 26px;\nfont-size: 0.68rem;\nfont-variant-numeric: tabular-nums;\nfont-weight: 600;\npadding: 0 0.2rem;\n}\n.pen-bar > .pen-timer-pill.pen-timer-low {\nbackground: #b91c1c;\ncolor: #fff;\nborder-color: #b91c1c;\n}\n.pen-nav-popover {\nposition: absolute;\nright: calc(100% + 8px);\ntop: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.28rem;\nwidth: min(270px, calc(100vw - 74px));\nmax-height: 66vh;\noverflow-y: auto;\npadding: 0.5rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\nhtml.pen-rail-left .pen-nav-popover,\nhtml.pen-rail-left .pen-popover {\nright: auto;\nleft: calc(100% + 8px);\n}\n.pen-nav-popover[hidden] {\ndisplay: none;\n}\n.pen-nav-head {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.4rem;\nfont-size: 0.8rem;\ntext-transform: uppercase;\nletter-spacing: 0.04em;\nopacity: 0.78;\npadding: 0.05rem 0.2rem 0.1rem;\n}\n.pen-nav-total-pts {\nfont-weight: 700;\nfont-size: 0.74rem;\ntext-transform: none;\nletter-spacing: 0;\n}\n.pen-nav-progress {\nheight: 5px;\nborder-radius: 999px;\nbackground: rgb(0 0 0 / 0.12);\noverflow: hidden;\nmargin-bottom: 0.15rem;\n}\n.pen-nav-progress-fill {\nheight: 100%;\nwidth: 0%;\nbackground: #000;\n}\n.pen-nav-list {\ndisplay: flex;\nflex-direction: column;\ngap: 0.22rem;\n}\n.pen-nav-jump {\nmargin-top: 0.2rem;\nmin-height: 34px;\npadding: 0 0.55rem;\nfont-size: 0.82rem;\nfont-weight: 600;\ntext-align: center;\n}\n.pen-nav-jump[hidden] {\ndisplay: none;\n}\n.pen-nav-item {\ndisplay: flex;\nalign-items: center;\ngap: 0.45rem;\nmin-height: 36px;\npadding: 0.2rem 0.55rem;\ntext-align: left;\nfont-size: 0.86rem;\n}\n.pen-nav-icon {\nflex: none;\nwidth: 1.1em;\ntext-align: center;\nfont-weight: 700;\n}\n.pen-nav-text {\nflex: 1;\nmin-width: 0;\noverflow: hidden;\ntext-overflow: ellipsis;\nwhite-space: nowrap;\n}\n.pen-nav-pts {\nflex: none;\nfont-size: 0.74rem;\nopacity: 0.7;\n}\n.pen-ink-controls {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.4rem;\npadding: 0.15rem 0.1rem;\n}\n.pen-swatches,\n.pen-nibs {\ndisplay: flex;\ngap: 0.28rem;\nalign-items: center;\n}\n.pen-popover .pen-swatch {\nmin-width: 28px;\nmin-height: 28px;\npadding: 0;\nborder-radius: 999px;\nbackground: var(--swatch, #1f2937);\nborder: 2px solid transparent;\nbox-shadow: inset 0 0 0 2px #fff;\n}\n.pen-popover .pen-swatch[aria-pressed=\"true\"] {\nborder-color: #000;\nbackground: var(--swatch, #1f2937);\n}\n.pen-popover .pen-nib {\nmin-width: 28px;\nmin-height: 28px;\npadding: 0;\ntext-align: center;\nfont-size: 0.78rem;\nfont-weight: 700;\n}\n.pen-paper-row {\ndisplay: flex;\ngap: 0.22rem;\n}\n.pen-paper-row[hidden] {\ndisplay: none;\n}\n.pen-popover .pen-paper-btn {\nflex: 1;\nmin-height: 30px;\npadding: 0 0.35rem;\ntext-align: center;\nfont-size: 0.78rem;\nfont-weight: 600;\n}\n.pen-rubric {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.3rem;\nmargin: 0 0 0.35rem;\n}\n.pen-rubric-item {\ndisplay: inline-flex;\nalign-items: center;\ngap: 0.25rem;\nfont-size: 0.8rem;\nline-height: 1.3;\npadding: 0.14rem 0.5rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 999px;\nbackground: rgb(0 0 0 / 0.03);\ncolor: inherit;\n}\n.pen-rubric-item::before {\ncontent: \"☐\";\nfont-size: 0.82em;\nopacity: 0.7;\n}\n.pen-rubric-item[data-met=\"true\"] {\nborder-color: #15803d;\nbackground: #f0fdf4;\ncolor: #15803d;\nfont-weight: 600;\n}\n.pen-rubric-item[data-met=\"true\"]::before {\ncontent: \"✓\";\nopacity: 1;\n}\n.pen-rubric-item[data-met=\"false\"] {\nborder-style: dashed;\nopacity: 0.72;\n}\n.pen-hint-box {\nmargin: 0.35rem 0 0.2rem;\npadding: 0.28rem 0.65rem;\nborder: 1px dashed rgb(0 0 0 / 0.35);\nborder-radius: 8px;\nbackground: rgb(0 0 0 / 0.02);\nfont-size: 0.9rem;\n}\n.pen-hint-box summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-hint-box[open] summary {\nmargin-bottom: 0.25rem;\n}\n.pen-confirm-bar {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 0.45rem 0;\npadding: 0.6rem 0.85rem;\nborder: 2px solid #b45309;\nborder-radius: 10px;\nbackground: #fffbeb;\ncolor: #000;\n}\n.pen-confirm-text {\nfont-weight: 600;\nfont-size: 0.92rem;\n}\n.pen-confirm-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\n}\n.pen-confirm-send,\n.pen-retry-missed {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\nfont-size: 0.9rem;\nfont-weight: 600;\ncursor: pointer;\n}\n.pen-prev-feedback {\nmargin: 0.4rem 0 0.9rem;\npadding: 0.35rem 0.7rem;\nborder: 1px dashed rgb(0 0 0 / 0.45);\nborder-left: 4px solid #b45309;\nborder-radius: 8px;\nbackground: rgb(0 0 0 / 0.025);\nfont-size: 0.92rem;\n}\n.pen-prev-feedback summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-timer-row {\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-timer-row .pen-timer-toggle {\nflex: 1;\n}\n.pen-timer-row .pen-timer-reset {\nflex: none;\nmin-width: 34px;\npadding: 0;\ntext-align: center;\n}\n.pen-timer-row .pen-timer-reset[hidden] {\ndisplay: none;\n}\n.pen-menu-sep {\nborder: none;\nborder-top: 1px solid rgb(0 0 0 / 0.18);\nmargin: 0.15rem 0;\n}\n.pen-popover {\nposition: absolute;\nright: calc(100% + 8px);\nbottom: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nmin-width: 190px;\npadding: 0.4rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-popover[hidden] {\ndisplay: none;\n}\n.pen-popover button {\nmin-height: 36px;\npadding: 0 0.65rem;\ntext-align: left;\nfont-size: 0.9rem;\nwhite-space: nowrap;\n}\n.pen-has-toolbar pen-input .pen-tools {\ndisplay: none;\n}\n.inkpad.pen-pad-active {\nborder-color: #000;\nbox-shadow: 0 0 0 1px #000;\n}\n.inkpad.pen-pad-flagged {\nborder-style: dashed;\nborder-width: 2px;\n}\n.inkpad.pen-pad-empty::after {\ncontent: attr(data-empty-hint);\nposition: absolute;\nleft: 12px;\ntop: 10px;\nz-index: 2;\npointer-events: none;\nfont-size: 0.85rem;\ncolor: rgb(100 116 139 / 0.65);\n}\n.inkpad:has(.pen-pad-pts).pen-pad-empty::after {\nleft: 68px;\n}\n.pen-pad-pts {\nposition: absolute;\nleft: 8px;\ntop: 8px;\nz-index: 4;\npointer-events: none;\npadding: 0.12rem 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont-size: 0.74rem;\nfont-weight: 700;\n}\n.pen-pad-top-actions {\nposition: absolute;\ntop: 6px;\nright: 6px;\nz-index: 4;\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-pad-btn {\nmin-width: 32px;\nmin-height: 32px;\npadding: 0 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.45);\nborder-radius: 8px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\nline-height: 1;\ncursor: pointer;\n}\n.pen-more-in {\nposition: absolute;\nright: 6px;\nbottom: 6px;\nz-index: 4;\nfont-weight: 700;\n}\n.pen-pin-in,\n.pen-flag-in {\nfont-size: 0.84rem;\n}\n.pen-pin-in[aria-pressed=\"true\"],\n.pen-flag-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\n.inkpad.readonly .pen-pad-btn,\n.inkpad.readonly .pen-pad-top-actions {\ndisplay: none;\n}\n.pen-pinned {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 28;\ndisplay: flex;\nalign-items: flex-start;\ngap: 0.5rem;\npadding: 0.45rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-pinned-body {\nflex: 1;\nmin-width: 0;\nmax-height: 28vh;\noverflow-y: auto;\nfont-size: 0.95rem;\nline-height: 1.4;\n}\n.pen-pinned-body > :first-child {\nmargin-top: 0;\n}\n.pen-pinned-body > :last-child {\nmargin-bottom: 0;\n}\n.pen-unpin {\nflex: none;\nmin-width: 32px;\nmin-height: 32px;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1.5rem 0 1rem;\n}\n.pen-submit-shell {\ndisplay: flex;\nflex-direction: column;\ngap: 0.55rem;\n}\n.pen-submit-primary {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.65rem;\n}\npen-submit .pen-send {\nmin-height: 44px;\npadding: 0 1.25rem;\nfont-weight: 700;\nfont-size: 1rem;\n}\n.pen-readiness {\nfont-size: 0.88rem;\npadding: 0.22rem 0.6rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 999px;\n}\n.pen-readiness[hidden] {\ndisplay: none;\n}\n.pen-readiness-all {\nfont-weight: 600;\nborder-color: #15803d;\ncolor: #15803d;\n}\n.pen-submit-utils {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nalign-items: center;\n}\n.pen-boox-btn {\nfont-size: 0.84rem;\nmin-height: 32px;\npadding: 0 0.6rem;\nborder-color: rgb(0 0 0 / 0.35);\n}\n.pen-boox-file[hidden] {\ndisplay: none;\n}\n.pen-review-bar {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 0.4rem 0 0.65rem;\npadding: 0.5rem 0.75rem;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-radius: 10px;\nbackground: rgb(0 0 0 / 0.025);\n}\n.pen-review-pills,\n.pen-review-filters {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nalign-items: center;\n}\n.pen-review-pill {\nfont-size: 0.84rem;\nfont-weight: 700;\npadding: 0.16rem 0.55rem;\nborder-radius: 999px;\nborder: 1px solid currentColor;\n}\n.pen-score-pill {\nfont-size: 0.88rem;\nfont-weight: 800;\npadding: 0.18rem 0.65rem;\nborder-radius: 999px;\nbackground: #000;\ncolor: #fff;\nborder: 1px solid #000;\n}\n.pen-time-pill {\nfont-size: 0.82rem;\nfont-weight: 600;\nfont-variant-numeric: tabular-nums;\npadding: 0.16rem 0.5rem;\nborder-radius: 999px;\nborder: 1px solid rgb(0 0 0 / 0.35);\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback-head {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.4rem;\nmargin-bottom: 0.25rem;\n}\n.pen-feedback-head .pen-badge,\n.pen-feedback-head .pen-verdict {\nmargin-bottom: 0;\n}\n.pen-pts-earned {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.12rem 0.48rem;\nborder-radius: 999px;\nborder: 1px solid rgb(0 0 0 / 0.28);\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-flag-tag {\nfont-size: 0.78rem;\nfont-weight: 700;\npadding: 0.1rem 0.42rem;\nborder-radius: 999px;\nborder: 1px solid currentColor;\nopacity: 0.8;\n}\n.pen-review-pill[data-verdict=\"correct\"] {\ncolor: #15803d;\nbackground: #f0fdf4;\n}\n.pen-review-pill[data-verdict=\"partial\"] {\ncolor: #b45309;\nbackground: #fffbeb;\n}\n.pen-review-pill[data-verdict=\"incorrect\"] {\ncolor: #b91c1c;\nbackground: #fef2f2;\n}\n.pen-review-pill[data-verdict=\"blank\"] {\ncolor: #475569;\nbackground: #f8fafc;\n}\n.pen-filter-btn {\nmin-height: 30px;\npadding: 0 0.6rem;\nfont-size: 0.82rem;\n}\n.pen-filter-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml[data-review-filter=\"needs-work\"] .pen-feedback[data-verdict=\"correct\"],\nhtml[data-review-filter=\"flagged\"] .pen-feedback:not([data-flagged=\"true\"]) {\nopacity: 0.36;\n}\n.pen-feedback {\nmargin: 0.55rem 0 1.15rem;\npadding: 0.75rem 1rem;\nborder: 1px solid rgb(0 0 0 / 0.22);\nborder-left: 4px solid #1e3a8a;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\nline-height: 1.58;\n}\n.pen-feedback[data-verdict=\"correct\"] {\nborder-left-color: #15803d;\n}\n.pen-feedback[data-verdict=\"partial\"] {\nborder-left-color: #b45309;\n}\n.pen-feedback[data-verdict=\"incorrect\"] {\nborder-left-color: #b91c1c;\n}\n.pen-feedback[data-verdict=\"blank\"] {\nborder-left-color: #475569;\n}\n.pen-feedback p {\nmargin: 0.35rem 0;\n}\n.pen-badge {\ndisplay: inline-block;\npadding: 0.16rem 0.6rem;\nmargin-bottom: 0.3rem;\nborder: 1px solid #1e3a8a;\nborder-radius: 999px;\nbackground: #eff6ff;\ncolor: #1e3a8a;\nfont-size: 0.85rem;\nfont-weight: 700;\n}\n.pen-badge[data-verdict=\"correct\"],\n.pen-verdict[data-verdict=\"correct\"] {\ncolor: #15803d;\nborder-color: #15803d;\nbackground: #f0fdf4;\n}\n.pen-badge[data-verdict=\"partial\"],\n.pen-verdict[data-verdict=\"partial\"] {\ncolor: #b45309;\nborder-color: #b45309;\nbackground: #fffbeb;\n}\n.pen-badge[data-verdict=\"incorrect\"],\n.pen-verdict[data-verdict=\"incorrect\"] {\ncolor: #b91c1c;\nborder-color: #b91c1c;\nbackground: #fef2f2;\n}\n.pen-badge[data-verdict=\"blank\"],\n.pen-verdict[data-verdict=\"blank\"] {\ncolor: #475569;\nborder-color: #475569;\nbackground: #f8fafc;\n}\n.pen-verdict {\ndisplay: inline-block;\npadding: 0.12rem 0.52rem;\nmargin-bottom: 0.25rem;\nborder: 1px solid currentColor;\nborder-radius: 999px;\nfont-size: 0.85rem;\n}\n.pen-read-line {\nfont-size: 0.9rem;\npadding: 0.28rem 0 0.35rem;\nmargin: 0.15rem 0 0.45rem;\nborder-bottom: 1px solid rgb(0 0 0 / 0.1);\ncolor: rgb(0 0 0 / 0.78);\n}\n.pen-md > :first-child {\nmargin-top: 0.2rem;\n}\n.pen-md > :last-child {\nmargin-bottom: 0.2rem;\n}\n.pen-md-h {\nmargin: 0.7rem 0 0.25rem;\nfont-size: 1rem;\nfont-weight: 700;\n}\n.pen-md ul,\n.pen-md ol {\nmargin: 0.35rem 0 0.45rem;\npadding-left: 1.35rem;\n}\n.pen-md li {\nmargin: 0.18rem 0;\n}\n.pen-md blockquote {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.7rem;\nborder-left: 3px solid #000;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-md code {\npadding: 0.08rem 0.3rem;\nborder-radius: 4px;\nbackground: rgb(0 0 0 / 0.07);\nfont-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\nfont-size: 0.9em;\n}\n.pen-code {\nmargin: 0.45rem 0;\npadding: 0.55rem 0.75rem;\noverflow-x: auto;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-radius: 6px;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-code code {\npadding: 0;\nbackground: none;\n}\n.pen-table-wrap {\nmargin: 0.45rem 0;\noverflow-x: auto;\n}\n.pen-md table {\nborder-collapse: collapse;\nwidth: 100%;\nfont-size: 0.92rem;\n}\n.pen-md th,\n.pen-md td {\npadding: 0.32rem 0.55rem;\nborder: 1px solid #000;\ntext-align: left;\n}\n.pen-md th {\nfont-weight: 700;\nbackground: rgb(0 0 0 / 0.05);\n}\n.pen-disclosure {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.65rem;\nborder: 1px dashed #000;\nborder-radius: 6px;\n}\n.pen-disclosure summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-disclosure[open] summary {\nmargin-bottom: 0.3rem;\n}\n.pen-next-time {\nfont-weight: 600;\n}\n.pen-summary-card {\nmargin: 0.65rem 0;\npadding: 0.7rem 0.9rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nmargin: 0.55rem 0;\n}\n.pen-followup {\nmargin-top: 0.75rem;\npadding: 0.7rem 0.85rem;\nborder: 1px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-followup-thread {\ndisplay: flex;\nflex-direction: column;\ngap: 0.5rem;\n}\n.pen-followup-thread:not(:empty) {\nmargin-bottom: 0.6rem;\n}\n.pen-followup-msg {\npadding: 0.45rem 0.65rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 8px;\n}\n.pen-followup-student {\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-followup-who {\ndisplay: block;\nfont-size: 0.78rem;\nfont-weight: 700;\ntext-transform: uppercase;\nletter-spacing: 0.03em;\nopacity: 0.75;\nmargin-bottom: 0.15rem;\n}\n.pen-followup-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\n}\n.pen-followup-input {\nflex: 1 1 14rem;\nmin-width: 0;\nmin-height: 40px;\npadding: 0 0.65rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-followup-status {\nmargin: 0.35rem 0 0;\nfont-size: 0.88rem;\n}\n.pen-grader-backdrop {\nposition: fixed;\ninset: 0;\nz-index: 60;\ndisplay: grid;\nplace-items: center;\npadding: 1rem;\nbackground: rgb(0 0 0 / 0.5);\n}\n.pen-grader-card {\nwidth: min(440px, 100%);\npadding: 1rem 1.1rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.65rem;\n}\n.pen-grader-head {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\n}\n.pen-grader-note {\nmargin: 0;\nfont-size: 0.88rem;\nline-height: 1.4;\n}\n.pen-grader-label {\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-grader-label[hidden] {\ndisplay: none;\n}\n.pen-grader-field {\nmin-height: 38px;\npadding: 0.35rem 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-weight: 400;\n}\n.pen-grader-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nmargin-top: 0.2rem;\n}\n.pen-grader-actions .pen-send {\nmin-height: 38px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\ncursor: pointer;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #ffffff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.35) calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px));\n}\n.hwq-eink .pen-feedback,\n.hwq-eink .pen-badge,\n.hwq-eink .pen-verdict,\n.hwq-eink .pen-review-bar,\n.hwq-eink .pen-review-pill,\n.hwq-eink .pen-time-pill,\n.hwq-eink .pen-readiness,\n.hwq-eink .pen-pad-btn,\n.hwq-eink .pen-pad-pts,\n.hwq-eink .pen-pts-earned,\n.hwq-eink .pen-rubric-item,\n.hwq-eink .pen-hint-box,\n.hwq-eink .pen-confirm-bar,\n.hwq-eink .pen-prev-feedback,\n.hwq-eink .pen-boox-btn {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-score-pill,\n.hwq-eink .pen-confirm-send,\n.hwq-eink .pen-retry-missed {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\n.hwq-eink .pen-rubric-item[data-met=\"true\"] {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\nborder-width: 2px;\n}\n.hwq-eink .pen-nav-progress {\nbackground: #fff;\nborder: 1px solid #000;\n}\n.hwq-eink .pen-read-line {\ncolor: #000;\nborder-bottom-color: #000;\n}\n.hwq-eink .pen-feedback[data-verdict=\"partial\"],\n.hwq-eink .pen-feedback[data-verdict=\"incorrect\"] {\nborder-left-width: 6px;\n}\n.hwq-eink .pen-bar > .pen-timer-pill.pen-timer-low,\n.hwq-eink .pen-filter-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\nhtml.pen-dark body {\nbackground: #111317 !important;\ncolor: #e6e8ec !important;\n}\nhtml.pen-dark .pen-bar,\nhtml.pen-dark .pen-popover,\nhtml.pen-dark .pen-nav-popover,\nhtml.pen-dark .pen-pinned,\nhtml.pen-dark .pen-feedback,\nhtml.pen-dark .pen-summary-card,\nhtml.pen-dark .pen-followup,\nhtml.pen-dark .pen-grader-card,\nhtml.pen-dark .pen-review-bar,\nhtml.pen-dark .pen-confirm-bar,\nhtml.pen-dark .pen-prev-feedback,\nhtml.pen-dark .pen-hint-box,\nhtml.pen-dark .pen-sheet-card,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar,\nhtml[data-darkreader-scheme=\"dark\"] .pen-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-nav-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pinned {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-followup-input,\nhtml.pen-dark .pen-grader-field,\nhtml.pen-dark .pen-disclosure,\nhtml.pen-dark .pen-badge,\nhtml.pen-dark .pen-verdict,\nhtml.pen-dark .pen-review-pill,\nhtml.pen-dark .pen-time-pill,\nhtml.pen-dark .pen-pts-earned,\nhtml.pen-dark .pen-rubric-item,\nhtml.pen-dark .pen-readiness,\nhtml.pen-dark .pen-pad-pts {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-score-pill,\nhtml.pen-dark .pen-confirm-send,\nhtml.pen-dark .pen-retry-missed,\nhtml.pen-dark .pen-nav-progress-fill {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-nav-progress {\nbackground: rgb(255 255 255 / 0.14) !important;\n}\nhtml.pen-dark .pen-read-line {\ncolor: #b8c0cc !important;\nborder-bottom-color: #363c48 !important;\n}\nhtml.pen-dark .pen-md code,\nhtml.pen-dark .pen-code,\nhtml.pen-dark .pen-md blockquote,\nhtml.pen-dark .pen-md th,\nhtml.pen-dark .pen-followup-student {\nbackground: rgb(255 255 255 / 0.06) !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-pad-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pad-btn {\nbackground: rgb(28 31 38 / 0.9) !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button,\nhtml.pen-dark .pen-unpin,\nhtml.pen-dark .pen-sheet-btn,\nhtml.pen-dark .pen-boox-btn,\nhtml.pen-dark .pen-filter-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button,\nhtml[data-darkreader-scheme=\"dark\"] .pen-unpin,\nhtml[data-darkreader-scheme=\"dark\"] .pen-boox-btn {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button[aria-pressed=\"true\"],\nhtml.pen-dark .pen-pin-in[aria-pressed=\"true\"],\nhtml.pen-dark .pen-flag-in[aria-pressed=\"true\"],\nhtml.pen-dark .pen-filter-btn[aria-pressed=\"true\"],\nhtml.pen-dark pen-submit .pen-send,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-pin-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-flag-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] pen-submit .pen-send {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-popover .pen-swatch {\nbackground: var(--swatch, #1f2937) !important;\nbox-shadow: inset 0 0 0 2px #1c1f26 !important;\n}\nhtml.pen-dark .pen-popover .pen-swatch[aria-pressed=\"true\"] {\nborder-color: #e6e8ec !important;\n}\npen-header {\ndisplay: block;\nmargin: 0.75rem 0 1.25rem;\n}\n.pen-header-card {\npadding: 0.85rem 1rem;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-bottom: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-header-top {\ndisplay: flex;\nalign-items: flex-start;\njustify-content: space-between;\ngap: 0.75rem;\n}\n.pen-header-titles {\nflex: 1;\nmin-width: 0;\n}\n.pen-header-title {\nmargin: 0;\nfont-size: 1.38rem;\nline-height: 1.25;\n}\n.pen-header-sub {\nmargin: 0.28rem 0 0;\nfont-size: 0.93rem;\nopacity: 0.8;\n}\n.pen-header-bottom {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem 1rem;\nmargin-top: 0.65rem;\n}\n.pen-header-meta {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\n}\n.pen-meta-chip {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.14rem 0.52rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\n}\n.pen-student-wrap {\ndisplay: inline-flex;\nalign-items: center;\ngap: 0.4rem;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-student-input {\nmin-height: 32px;\nwidth: 13rem;\nmax-width: 55vw;\npadding: 0.15rem 0.5rem;\nborder: none;\nborder-bottom: 1.5px solid #000;\nbackground: transparent;\ncolor: inherit;\nfont: inherit;\nfont-weight: 400;\n}\n.pen-focus-hidden {\ndisplay: none !important;\n}\n.pen-focus-bar {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 1rem 0 1.25rem;\npadding: 0.55rem 0.75rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-focus-pos {\nfont-size: 0.9rem;\nfont-weight: 700;\n}\n.pen-confidence {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.35rem;\nmargin: 0.38rem 0 0.15rem;\n}\n.pen-confidence-label {\nfont-size: 0.82rem;\nopacity: 0.75;\nmargin-right: 0.15rem;\n}\n.pen-conf-btn {\nmin-height: 30px;\npadding: 0 0.6rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.82rem;\ncursor: pointer;\n}\n.pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\nfont-weight: 600;\n}\n.pen-conf-btn:disabled {\nopacity: 0.5;\ncursor: default;\n}\n.pen-conf-tag {\nfont-size: 0.78rem;\nfont-weight: 600;\npadding: 0.1rem 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 999px;\n}\n.pen-conf-warn,\n.pen-conf-warn-pill {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.14rem 0.52rem;\nborder: 1px solid #b45309;\nborder-radius: 999px;\nbackground: #fffbeb;\ncolor: #b45309;\n}\n.pen-progress-pill {\nfont-size: 0.82rem;\nfont-weight: 700;\npadding: 0.16rem 0.55rem;\nborder: 1px solid #15803d;\nborder-radius: 999px;\nbackground: #f0fdf4;\ncolor: #15803d;\n}\n.hwq-eink .pen-header-card,\n.hwq-eink .pen-meta-chip,\n.hwq-eink .pen-focus-bar,\n.hwq-eink .pen-conf-btn,\n.hwq-eink .pen-conf-tag,\n.hwq-eink .pen-conf-warn,\n.hwq-eink .pen-conf-warn-pill,\n.hwq-eink .pen-progress-pill {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml.pen-dark .pen-header-card,\nhtml.pen-dark .pen-focus-bar {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-meta-chip,\nhtml.pen-dark .pen-conf-btn,\nhtml.pen-dark .pen-conf-tag,\nhtml.pen-dark .pen-conf-warn,\nhtml.pen-dark .pen-conf-warn-pill,\nhtml.pen-dark .pen-progress-pill {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-student-input {\nborder-bottom-color: #6b7280 !important;\n}\nhtml.pen-dark .pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n.pen-sheet-card {\nmargin-top: 0.75rem;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-sheet-head {\ndisplay: flex;\nalign-items: baseline;\njustify-content: space-between;\ngap: 0.5rem;\nfont-size: 1.05rem;\n}\n.pen-sheet-count {\nfont-size: 0.85rem;\npadding: 0.15rem 0.5rem;\nborder: 1px solid #000;\nborder-radius: 999px;\n}\n.pen-sheet-msg {\nmargin: 0.4rem 0 0.65rem;\nfont-size: 0.92rem;\n}\n.pen-sheet-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nmargin-bottom: 0.6rem;\n}\n.pen-sheet-btn {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.75rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\ntext-decoration: none;\ncursor: pointer;\n}\n.pen-sheet-btn[hidden] {\ndisplay: none;\n}\n.pen-sheet-skipped {\nmargin: 0.25rem 0 0.6rem;\nfont-size: 0.88rem;\n}\n.pen-sheet-item {\nmargin: 0.7rem 0;\npadding-top: 0.5rem;\nborder-top: 1px solid #000;\n}\n.pen-sheet-item-head {\nfont-weight: 700;\nfont-size: 0.95rem;\nmargin-bottom: 0.3rem;\n}\n.pen-sheet-typed {\nmargin: 0.25rem 0 0.4rem;\nwhite-space: pre-wrap;\n}\n.pen-sheet-fig {\nmargin: 0.35rem 0 0;\n}\n.pen-sheet-fig img {\ndisplay: block;\nmax-width: 100%;\nborder: 1px solid #000;\nborder-radius: 6px;\n}\n.pen-sheet-details {\nmargin-top: 0.65rem;\n}\n.pen-sheet-details summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 32px;\n}\n@media print {\npen-toolbar,\n.pen-tools,\n.pen-pad-btn,\n.pen-pad-top-actions,\n.pen-pinned,\n.pen-hint-box,\n.pen-confirm-bar,\n.pen-prev-feedback,\n.pen-sheet-actions,\n.pen-save,\n.pen-boox-btn,\n.pen-readiness,\n.pen-submit-utils,\n.pen-review-filters,\n.pen-followup-form,\n.pen-feedback-actions,\n.pen-grader-backdrop,\n.pen-focus-bar,\n.pen-focus-btn,\n.pen-confidence,\npen-submit .pen-send {\ndisplay: none !important;\n}\n.pen-focus-hidden {\ndisplay: block !important;\n}\n.inkpad.pen-pad-empty::after {\ncontent: none !important;\n}\n.inkpad,\n.pen-feedback,\n.pen-summary-card,\n.pen-review-bar {\nbreak-inside: avoid;\npage-break-inside: avoid;\n}\n.pen-has-toolbar body,\nhtml.pen-has-toolbar.pen-rail-left body {\npadding-right: 0 !important;\npadding-left: 0 !important;\n}\n}";
 const WORDS = {
 exportFailed: "Your handwriting could not be prepared for hand-in. Your work is still here: keep writing or try handing in again.",
 correct: "✓ Correct",
@@ -2885,7 +2959,32 @@ questionsNav: "Question navigator",
 printReview: "🖨 Print / Save review",
 reviewAll: "All",
 reviewNeedsWork: "Needs work",
+reviewFlagged: "⚑ Flagged",
 writeHere: "Write here…",
+hintTitle: "💡 Need a hint?",
+rubricLabel: "Checklist",
+retryMissed: "↻ Retry missed",
+prevFeedback: "Previous feedback — revise above",
+copyNotes: "📝 Copy study notes",
+saveNotes: "⬇ Save report (.md)",
+railLeft: "⇄ Toolbar on left",
+railRight: "⇄ Toolbar on right",
+handInAnyway: "Hand in anyway",
+jumpNext: "Jump to",
+handInRevisions: "Hand in revisions",
+paperRuled: "Ruled",
+paperGrid: "Grid",
+paperBlank: "Blank",
+focusOn: "🎯 Focus mode",
+focusOff: "📄 Scroll all",
+practiceWeak: "⚡ Practice weak spots",
+confidencePrompt: "How sure are you?",
+guess: "Guess",
+unsure: "Unsure",
+sure: "Sure",
+studentNamePlaceholder: "Your name (optional)",
+prevQ: "← Previous",
+nextQ: "Next →",
 };
 function word(key) {
 try {
@@ -2907,10 +3006,15 @@ return x.toString(36);
 const storeKey = () => `pen:${hash(document.title + (localAgent()?.base ?? location.pathname))}`; // served, every quiz in a folder has one address
 let saved = {};
 const flagged = new Set();
+const confidences = new Map();
+let studentName = "";
+let attempts = [];
 const saver = saveLater({
 write: () => {
 const pens = Object.fromEntries(penInputs().map((p) => [p.name, p.pad.toJSON()]));
-saved = { pens, typed: Object.fromEntries(controlNames().map((name) => [name, controlValue(name)])), flagged: [...flagged], graded };
+const papers = Object.fromEntries(penInputs().filter((p) => !p.figureSource).map((p) => [p.name, p.pad.paper]));
+const confidence = Object.fromEntries([...confidences.entries()].filter(([, v]) => Boolean(v)));
+saved = { pens, papers, typed: Object.fromEntries(controlNames().map((name) => [name, controlValue(name)])), confidence, flagged: [...flagged], studentName, attempts, graded };
 keep(storeKey(), JSON.stringify(saved));
 const answers = [...penInputs().map((p) => !p.pad.isEmpty), ...Object.values(saved.typed).map((v) => Boolean(v?.length))];
 reportProgress(answers.filter(Boolean).length, answers.length);
@@ -2963,17 +3067,45 @@ function pointsOf(el) {
 const n = Number(el?.getAttribute?.("points"));
 return Number.isFinite(n) && n > 0 ? n : 1;
 }
+function rubricOf(el) {
+const raw = el?.getAttribute?.("rubric");
+if (!raw) return null;
+const items = raw.split(/\s*(?:\||;|\n)\s*/).map((s) => s.trim()).filter(Boolean);
+return items.length ? items : null;
+}
 function fields() {
 const pens = penInputs().map((p) => {
 const ink = p.pad.toPNG();
-return { q: { id: p.name, points: pointsOf(p) }, label: labelOf(p), inks: ink ? [{ id: p.name, ...ink }] : [] };
+const rubric = rubricOf(p);
+const conf = confidences.get(p.name);
+return {
+q: { id: p.name, points: pointsOf(p), showPoints: p.hasAttribute("points"), ...(rubric ? { rubric } : {}) },
+label: labelOf(p),
+...(conf ? { confidence: conf } : {}),
+inks: ink ? [{ id: p.name, ...ink }] : [],
+};
 });
-const typed = controlNames().map((name) => ({ q: { id: name, points: pointsOf(controls(name)[0]) }, label: labelOf(controls(name)[0]), typed: controlValue(name), inks: [] }));
+const typed = controlNames().map((name) => {
+const el = controls(name)[0];
+const rubric = rubricOf(el);
+const conf = confidences.get(name);
+return {
+q: { id: name, points: pointsOf(el), showPoints: Boolean(el?.hasAttribute?.("points")), ...(rubric ? { rubric } : {}) },
+label: labelOf(el),
+typed: controlValue(name),
+...(conf ? { confidence: conf } : {}),
+inks: [],
+};
+});
 return [...pens, ...typed];
 }
 function pageText() {
 const copy = document.body.cloneNode(true);
-copy.querySelectorAll("pen-input, pen-submit, script, style, .pen-feedback, .pen-away, .pen-save").forEach((el) => el.remove());
+copy
+.querySelectorAll(
+"pen-input, pen-submit, pen-toolbar, script, style, .pen-feedback, .pen-prev-feedback, .pen-confirm-bar, .pen-away, .pen-save, .pen-header-meta, .pen-student-wrap, .pen-focus-bar, .pen-confidence",
+)
+.forEach((el) => el.remove());
 const words = [];
 const walker = document.createTreeWalker(copy, NodeFilter.SHOW_TEXT);
 while (walker.nextNode()) words.push(walker.currentNode.nodeValue);
@@ -2986,6 +3118,7 @@ function lock(locked) {
 inputsLocked = locked;
 for (const p of penInputs()) p.pad.setReadOnly(locked);
 for (const c of controls()) c.disabled = locked;
+document.querySelectorAll(".pen-confidence button").forEach((b) => (b.disabled = locked));
 document.querySelectorAll(".pen-tools").forEach((t) => (t.hidden = locked));
 document.querySelectorAll("pen-submit .pen-send").forEach((b) => (b.disabled = locked));
 }
@@ -2994,25 +3127,46 @@ function status(...nodes) {
 statusBox()?.replaceChildren(...nodes.filter((n) => n != null && n !== false));
 }
 function showFeedback() {
-document.querySelectorAll(".pen-feedback").forEach((el) => el.remove());
+document.querySelectorAll(".pen-feedback, .pen-prev-feedback").forEach((el) => el.remove());
+for (const p of penInputs()) {
+p.querySelectorAll(".pen-rubric-item").forEach((chip) => chip.removeAttribute("data-met"));
+}
 if (!graded) return;
 for (const [name, g] of Object.entries(graded.grades ?? {})) {
 const pen = penInputs().find((p) => p.name === name);
 const anchor = pen ?? controls(name).at(-1);
 if (!anchor) continue;
 pen?.pad.setMarks(graded.marks?.[name] ?? []);
+if (pen && Array.isArray(g.met) && g.met.length) {
+const metSet = new Set(g.met);
+pen.querySelectorAll(".pen-rubric-item").forEach((chip, idx) => {
+chip.setAttribute("data-met", metSet.has(idx + 1) ? "true" : "false");
+});
+}
 const after = anchor.closest("label") ?? anchor;
 const heading = g.badge
 ? h("span", { class: "pen-badge", "data-verdict": g.verdict || undefined }, g.badge)
 : g.verdict
 ? h("strong", { class: "pen-verdict", "data-verdict": g.verdict }, word(g.verdict))
 : null;
+const maxPts = anchor.hasAttribute?.("points") ? pointsOf(anchor) : null;
+const earnedChip =
+maxPts && (g.verdict || (typeof g.points === "number" && g.points > 0))
+? h("span", { class: "pen-pts-earned" }, `${g.points} / ${maxPts} pt${maxPts === 1 ? "" : "s"}`)
+: null;
+const flagChip = flagged.has(name) ? h("span", { class: "pen-flag-tag" }, "⚑") : null;
+const confVal = confidences.get(name);
+const isConfMistake = confVal === "sure" && (g.verdict === "incorrect" || g.verdict === "partial");
+const confChip = confVal
+? h("span", { class: `pen-conf-tag${isConfMistake ? " pen-conf-warn" : ""}` }, isConfMistake ? `⚠ ${word("sure")}` : word(confVal))
+: null;
+const headRow = heading || earnedChip || confChip || flagChip ? h("div", { class: "pen-feedback-head" }, heading, earnedChip, confChip, flagChip) : null;
 const bodyText = g.feedback || g.comment;
 after.after(
 h(
 "div",
-{ class: "pen-feedback", "data-for": name, "data-verdict": g.verdict || undefined },
-heading,
+{ class: "pen-feedback", "data-for": name, "data-verdict": g.verdict || undefined, "data-flagged": flagged.has(name) ? "true" : undefined },
+headRow,
 g.readAs ? h("p", { class: "pen-read-line" }, `${word("read")} `, rich(g.readAs, "pen-inline"), pen && tutorAvailable("auto") ? [" ", misreadButton(name)] : null) : null,
 bodyText ? richMarkdown(bodyText, "pen-md") : null,
 g.nudge ? h("details", { class: "pen-disclosure pen-nudge" }, h("summary", {}, word("nudge")), richMarkdown(g.nudge, "pen-md")) : null,
@@ -3030,16 +3184,73 @@ g.nextTime ? h("p", { class: "pen-next-time" }, "👉 ", rich(g.nextTime, "pen-i
 const reportNode = graded.markdown ? h("div", { class: "pen-feedback pen-feedback-report" }, richMarkdown(graded.markdown, "pen-md")) : null;
 const reviewBar = typeof buildReviewBar === "function" ? buildReviewBar(graded.grades ?? {}) : null;
 const summaryNode = graded.summary ? h("div", { class: "pen-summary-card" }, richMarkdown(graded.summary, "pen-md pen-summary")) : null;
+const entries = Object.values(graded.grades ?? {});
+const correctCount = entries.filter((g) => g.verdict === "correct").length;
+const needsWorkCount = entries.filter((g) => g.verdict === "partial" || g.verdict === "incorrect" || g.verdict === "blank").length;
+const copyNotesBtn =
+typeof buildStudyNotesMarkdown === "function"
+? h(
+"button",
+{
+type: "button",
+class: "pen-sheet-btn",
+onclick: async () => {
+try {
+await navigator.clipboard.writeText(buildStudyNotesMarkdown());
+copyNotesBtn.textContent = "✓ Notes copied!";
+} catch {
+downloadStudyNotes();
+}
+},
+},
+word("copyNotes"),
+)
+: null;
+const saveNotesBtn =
+typeof downloadStudyNotes === "function"
+? h("button", { type: "button", class: "pen-sheet-btn", onclick: downloadStudyNotes }, word("saveNotes"))
+: null;
+const retryMissedBtn =
+needsWorkCount > 0 && correctCount > 0 && tutorAvailable("auto") && typeof retryMissed === "function"
+? h("button", { type: "button", class: "pen-retry-missed", onclick: retryMissed }, `${word("retryMissed")} (${needsWorkCount})`)
+: null;
+const practiceWeakBtn =
+(needsWorkCount > 0 || flagged.size > 0) && typeof buildFollowUpDrillPrompt === "function"
+? h(
+"button",
+{
+type: "button",
+class: "pen-sheet-btn pen-practice-weak",
+onclick: async () => {
+const prompt = buildFollowUpDrillPrompt();
+try {
+await navigator.clipboard.writeText(prompt);
+practiceWeakBtn.textContent = "✓ Weak-spot prompt copied!";
+} catch {
+downloadTextFile(`${slugOfTitle()}-next-practice-prompt.txt`, prompt);
+}
+},
+},
+word("practiceWeak"),
+)
+: null;
 const actionsRow = h(
 "div",
 { class: "pen-feedback-actions" },
+retryMissedBtn,
 h("button", { type: "button", class: "pen-again", onclick: reopen }, word("again")),
+practiceWeakBtn,
+copyNotesBtn,
+saveNotesBtn,
 h("button", { type: "button", class: "pen-sheet-btn", onclick: () => window.print() }, word("printReview")),
 );
 const followUp = tutorAvailable("auto") ? followUpPanel() : null;
 status(reviewBar, reportNode, summaryNode, actionsRow, followUp);
 lock(true);
-document.querySelectorAll("pen-submit .pen-send").forEach((b) => (b.hidden = true));
+document.querySelectorAll("pen-submit .pen-send").forEach((b) => {
+b.hidden = true;
+if (b.dataset.label) b.textContent = b.dataset.label;
+});
 refreshTools();
 document.dispatchEvent(new CustomEvent("pen-feedback", { detail: { grades: graded.grades, summary: graded.summary, markdown: graded.markdown || "" } }));
 }
@@ -3101,6 +3312,7 @@ function reopen() {
 run++;
 graded = null;
 followUps = [];
+if (typeof clearRetryState === "function") clearRetryState();
 reviewFilter = "all";
 document.documentElement.removeAttribute("data-review-filter");
 for (const p of penInputs()) p.pad.setMarks([]);
@@ -3108,7 +3320,10 @@ showFeedback();
 status();
 lock(false);
 refreshTools();
-document.querySelectorAll("pen-submit .pen-send").forEach((b) => (b.hidden = false));
+document.querySelectorAll("pen-submit .pen-send").forEach((b) => {
+b.hidden = false;
+if (b.dataset.label) b.textContent = b.dataset.label;
+});
 save();
 }
 async function buildCombinedSheet(items) {
@@ -3316,22 +3531,25 @@ items = fields();
 status(h("p", { role: "alert" }, word("exportFailed")));
 return null;
 }
-if (!items.some((it) => it.inks.length || it.typed)) {
+const retry = typeof activeRetryState === "function" ? activeRetryState() : null;
+const targetItems = retry ? items.filter((it) => retry.ids.has(it.q.id)) : items;
+if (!targetItems.some((it) => it.inks.length || it.typed)) {
 status(h("p", {}, word("empty")));
 return null;
 }
 const mine = ++run;
 if (!tutorAvailable("auto")) {
-showToPass(items, "No grading server is connected to this page. Copy or download your answer sheet below and paste it into any AI chat (Claude, ChatGPT, Gemini) for teacher feedback.");
+showToPass(targetItems, "No grading server is connected to this page. Copy or download your answer sheet below and paste it into any AI chat (Claude, ChatGPT, Gemini) for teacher feedback.");
 return null;
 }
+const elapsedSeconds = typeof captureElapsedTime === "function" ? captureElapsedTime() : 0;
 lock(true);
 status(h("p", { class: "pen-thinking" }, word("checking")));
 try {
 const meta = { title: document.title, pageText: pageText(), lang: pageLang(), feedbackLang: feedbackLang() };
-const request = pageRequest({ ...meta, items });
-const submission = { ...meta, items: items.map(({ q, label, typed, inks }) => ({ id: q.id, label, typed, images: inks })) };
-const reply = await askClaude(request, { maxTokens: Math.min(12000, 2500 + 700 * items.length), reuse: true, stillWanted: () => mine === run, expects: expectsGrades(items), submission });
+const request = pageRequest({ ...meta, items: targetItems });
+const submission = { ...meta, items: targetItems.map(({ q, label, typed, inks }) => ({ id: q.id, label, typed, images: inks })) };
+const reply = await askClaude(request, { maxTokens: Math.min(12000, 2500 + 700 * targetItems.length), reuse: true, stillWanted: () => mine === run, expects: expectsGrades(targetItems), submission });
 if (mine !== run) return null;
 let parsed;
 try {
@@ -3341,14 +3559,19 @@ const rawText = typeof reply === "string" ? reply.trim() : "";
 if (!rawText) throw parseErr;
 parsed = { markdown: rawText, questions: [], summary: "" };
 }
-const normalized = normalizeGrades(parsed, items.map((it) => it.q));
+const normalized = normalizeGrades(parsed, targetItems.map((it) => it.q));
 const { grades, summary } = normalized;
 const markdown = normalized.markdown || parsed?.markdown || "";
 const marks = {};
-for (const it of items) {
+for (const it of targetItems) {
 if (grades[it.q.id] && it.inks.length) marks[it.q.id] = marksToPaper(grades[it.q.id].marks, it.inks).get(it.q.id) ?? [];
 }
-graded = { grades, summary, marks, ...(markdown ? { markdown } : {}) };
+const mergedGrades = retry ? { ...retry.keptGrades, ...grades } : grades;
+const mergedMarks = retry ? { ...retry.keptMarks, ...marks } : marks;
+const keptElapsed = retry?.elapsedSeconds || elapsedSeconds;
+if (typeof clearRetryState === "function") clearRetryState();
+graded = { grades: mergedGrades, summary, marks: mergedMarks, ...(markdown ? { markdown } : {}), ...(keptElapsed > 0 ? { elapsedSeconds: keptElapsed } : {}) };
+if (typeof recordAttempt === "function") recordAttempt(graded);
 showFeedback();
 save();
 return graded;
@@ -3356,8 +3579,9 @@ return graded;
 if (mine !== run) return null;
 console.warn("Handing in failed:", err);
 lock(false);
+if (retry && typeof reapplyRetryLocks === "function") reapplyRetryLocks();
 const reason = err?.message ? ` (${String(err.message).slice(0, 160)})` : "";
-showToPass(items, `It couldn't be checked from here${reason}. Try again, or send these to whoever made this page.`);
+showToPass(targetItems, `It couldn't be checked from here${reason}. Try again, or send these to whoever made this page.`);
 statusBox()?.prepend(h("button", { type: "button", onclick: handIn }, word("retry")));
 return null;
 }
@@ -3365,6 +3589,265 @@ return null;
 watchDevice();
 watchForNewQuiz();
 let followUps = [];
+let retryState = null;
+function activeRetryState() {
+return retryState;
+}
+function clearRetryState() {
+retryState = null;
+}
+function reapplyRetryLocks() {
+if (!retryState) return;
+for (const p of penInputs()) p.pad.setReadOnly(!retryState.ids.has(p.name));
+for (const name of controlNames()) {
+const locked = !retryState.ids.has(name);
+for (const c of controls(name)) c.disabled = locked;
+}
+}
+function captureElapsedTime() {
+const used = timerCountdown > 0 ? Math.max(0, timerCountdown - timerSeconds) : timerSeconds;
+if (timerRunning) pauseTimer();
+return used;
+}
+function retryMissed() {
+if (!graded) return;
+const keptGrades = {};
+const keptMarks = {};
+const missedIds = new Set();
+const prevFeedbackMap = new Map();
+for (const [name, g] of Object.entries(graded.grades ?? {})) {
+if (g.verdict === "correct") {
+keptGrades[name] = g;
+if (graded.marks?.[name]) keptMarks[name] = graded.marks[name];
+} else if (g.verdict === "partial" || g.verdict === "incorrect" || g.verdict === "blank") {
+missedIds.add(name);
+prevFeedbackMap.set(name, g);
+}
+}
+if (!missedIds.size) return reopen();
+const elapsedSeconds = graded.elapsedSeconds || 0;
+retryState = { ids: missedIds, keptGrades, keptMarks, elapsedSeconds };
+run++;
+graded = null;
+followUps = [];
+reviewFilter = "all";
+document.documentElement.removeAttribute("data-review-filter");
+inputsLocked = false;
+document.querySelectorAll(".pen-prev-feedback").forEach((el) => el.remove());
+let firstMissedEl = null;
+for (const [name, g] of prevFeedbackMap) {
+document.querySelector(`.pen-feedback[data-for="${CSS.escape(name)}"]`)?.remove();
+const pen = penInputs().find((p) => p.name === name);
+const anchor = pen ?? controls(name).at(-1);
+if (!firstMissedEl && anchor) firstMissedEl = anchor;
+pen?.pad.setMarks([]);
+if (anchor) {
+const after = anchor.closest("label") ?? anchor;
+const prevBody = g.feedback || g.comment || "";
+after.after(
+h(
+"details",
+{ class: "pen-prev-feedback", "data-for": name },
+h("summary", {}, word("prevFeedback")),
+g.readAs ? h("p", { class: "pen-read-line" }, `${word("read")} `, rich(g.readAs, "pen-inline")) : null,
+prevBody ? richMarkdown(prevBody, "pen-md") : null,
+g.nudge ? h("p", {}, "💡 ", rich(g.nudge, "pen-inline")) : null,
+g.nextTime ? h("p", { class: "pen-next-time" }, "👉 ", rich(g.nextTime, "pen-inline")) : null,
+),
+);
+}
+}
+reapplyRetryLocks();
+document.querySelectorAll("pen-submit .pen-send").forEach((b) => {
+b.hidden = false;
+b.disabled = false;
+b.textContent = `${word("handInRevisions")} (${missedIds.size})`;
+});
+status();
+refreshTools();
+if (firstMissedEl) scrollToField(firstMissedEl);
+}
+function requestHandIn() {
+if (inputsLocked) return;
+if (retryState) return handIn();
+const list = fieldSummaries();
+const answeredCount = list.filter((f) => f.answered).length;
+if (!answeredCount) return handIn(); // let handIn() show the empty notice
+const unanswered = list.filter((f) => !f.answered);
+const flaggedItems = list.filter((f) => f.flagged);
+if (!unanswered.length && !flaggedItems.length) return handIn();
+const firstAttention = flaggedItems[0] ?? unanswered[0];
+const parts = [];
+if (unanswered.length) parts.push(`${unanswered.length} unanswered`);
+if (flaggedItems.length) parts.push(`${flaggedItems.length} flagged ⚑`);
+status(
+h(
+"div",
+{ class: "pen-confirm-bar", role: "alert" },
+h("span", { class: "pen-confirm-text" }, `⚠ ${parts.join(" · ")} before handing in.`),
+h(
+"div",
+{ class: "pen-confirm-actions" },
+firstAttention
+? h(
+"button",
+{
+type: "button",
+class: "pen-sheet-btn",
+onclick: () => {
+status();
+scrollToField(firstAttention.el);
+},
+},
+`${word("jumpNext")} #${firstAttention.index}`,
+)
+: null,
+h("button", { type: "button", class: "pen-confirm-send", onclick: handIn }, word("handInAnyway")),
+),
+),
+);
+}
+function slugOfTitle() {
+return (document.title || "worksheet").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "worksheet";
+}
+function downloadTextFile(filename, text, mime = "text/plain;charset=utf-8") {
+const blob = new Blob([text], { type: mime });
+const url = URL.createObjectURL(blob);
+const a = document.createElement("a");
+a.href = url;
+a.download = filename;
+document.body.append(a);
+a.click();
+a.remove();
+setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+function recordAttempt(result) {
+const entries = Object.entries(result?.grades ?? {});
+if (!entries.length) return;
+const list = fieldSummaries();
+const byId = new Map(list.map((f) => [f.id, f]));
+let earned = 0, possible = 0, correct = 0;
+for (const [id, g] of entries) {
+const maxPts = byId.get(id)?.points ?? 1;
+if (g.verdict === "correct") correct++;
+if (g.verdict || (typeof g.points === "number" && g.points > 0)) {
+earned += Number(g.points) || 0;
+possible += maxPts;
+}
+}
+const pct = possible > 0 ? Math.round((earned / possible) * 100) : 0;
+attempts.push({
+at: new Date().toISOString(),
+earned: Math.round(earned * 10) / 10,
+possible,
+pct,
+correct,
+total: entries.length,
+...(result?.elapsedSeconds > 0 ? { elapsedSeconds: result.elapsedSeconds } : {}),
+});
+if (attempts.length > 10) attempts = attempts.slice(-10);
+}
+function buildFollowUpDrillPrompt() {
+const title = document.title || "Worksheet";
+const list = fieldSummaries();
+const targets = [];
+for (const f of list) {
+const g = f.grade;
+const conf = confidences.get(f.id);
+const isWeak = g && (g.verdict === "partial" || g.verdict === "incorrect" || g.verdict === "blank");
+const isConfMistake = conf === "sure" && (g?.verdict === "incorrect" || g?.verdict === "partial");
+const isLuckyGuess = conf === "guess" && g?.verdict === "correct";
+if (!isWeak && !f.flagged && !isLuckyGuess) continue;
+const notes = [];
+if (g?.verdict) notes.push(`status: ${g.verdict}`);
+if (isConfMistake) notes.push("CONFIDENT MISTAKE (prioritize refuting this misconception!)");
+else if (isLuckyGuess) notes.push("guessed right (verify understanding with a fresh variant)");
+if (f.flagged) notes.push("flagged by student for review");
+if (g?.readAs) notes.push(`student wrote: ${g.readAs}`);
+if (g?.misconception) notes.push(`misconception: ${g.misconception}`);
+if (g?.nextTime) notes.push(`takeaway: ${g.nextTime}`);
+if (f.rubric?.length && Array.isArray(g?.met)) {
+const missedCrit = f.rubric.filter((_, idx) => !g.met.includes(idx + 1));
+if (missedCrit.length) notes.push(`unmet rubric criteria: ${missedCrit.join("; ")}`);
+}
+targets.push(`- **${f.label}** (${notes.join(" | ")})`);
+}
+return [
+`Create a focused 3–5 question follow-up handwritten practice worksheet (using pen-sheet HTML with <pen-header>, <pen-toolbar>, <pen-input>, and <pen-submit>) targeting ONLY the weak spots from my recent "${title}" attempt.`,
+"",
+"Focus areas to drill (do NOT repeat the exact same numbers/examples — build fresh variants and 1 'Find the mistake' problem):",
+...(targets.length ? targets : ["- Build a slightly harder transfer drill covering the same concepts."]),
+"",
+"Include concise `rubric=\"...\"` criteria and a progressive `hint=\"...\"` on the trickiest problem, plus `confidence` calibration chips.",
+].join("\n");
+}
+function buildStudyNotesMarkdown() {
+const title = document.title || "Worksheet";
+const date = new Date().toLocaleDateString();
+const list = fieldSummaries();
+const sName = typeof studentName === "string" ? studentName.trim() : "";
+const hist = typeof attempts !== "undefined" && Array.isArray(attempts) ? attempts : [];
+const lines = [`# ${title} — Study Review`, sName ? `Student: **${sName}** · Date: ${date}` : `Date: ${date}`];
+let earned = 0, possible = 0, scored = 0;
+for (const f of list) {
+if (!f.grade) continue;
+const pts = f.points ?? 1;
+if (f.grade.verdict || (typeof f.grade.points === "number" && f.grade.points > 0)) {
+earned += Number(f.grade.points) || 0;
+possible += pts;
+scored++;
+}
+}
+const metaBits = [];
+if (scored > 0 && possible > 0) {
+const pct = Math.round((earned / possible) * 100);
+metaBits.push(`Score: **${Math.round(earned * 10) / 10} / ${possible} pts (${pct}%)**`);
+}
+if (graded?.elapsedSeconds > 0) metaBits.push(`Time: **${formatTime(graded.elapsedSeconds)}**`);
+if (hist.length >= 2) {
+metaBits.push(`Progress: **${hist.map((a, i) => `Try ${i + 1}: ${a.pct}%`).join(" → ")}**`);
+}
+if (metaBits.length) lines.push(metaBits.join(" · "));
+lines.push("");
+if (graded?.summary) {
+lines.push("## Summary", graded.summary, "");
+}
+if (graded?.markdown) {
+lines.push("## Teacher Notes", graded.markdown, "");
+}
+const weakTopics = [];
+for (const f of list) {
+const g = f.grade;
+if (!g) continue;
+const statusLabel = g.badge || (g.verdict ? word(g.verdict) : "Reviewed");
+const ptsLabel = f.points && (g.verdict || g.points > 0) ? ` (${g.points}/${f.points} pts)` : "";
+const conf = typeof confidences !== "undefined" ? confidences.get(f.id) : "";
+const confLabel = conf ? ` [${word(conf)}]` : "";
+const flagLabel = f.flagged ? " ⚑" : "";
+lines.push(`### ${f.index}. ${f.label} — ${statusLabel}${ptsLabel}${confLabel}${flagLabel}`);
+if (g.readAs) lines.push(`- **I read:** ${g.readAs}`);
+if (g.feedback || g.comment) lines.push(`- **Feedback:** ${g.feedback || g.comment}`);
+if (g.nudge) lines.push(`- **Hint:** ${g.nudge}`);
+if (g.solution || g.correctAnswer) lines.push(`- **Solution:** ${g.solution || g.correctAnswer}`);
+if (g.nextTime) lines.push(`- **Next time:** ${g.nextTime}`);
+lines.push("");
+if (g.verdict === "partial" || g.verdict === "incorrect" || g.verdict === "blank") {
+weakTopics.push(`- ${f.label}${g.nextTime ? `: ${g.nextTime}` : ""}`);
+}
+}
+if (followUps.length) {
+lines.push("## Follow-up Q&A");
+for (const m of followUps) lines.push(`- **${m.role === "student" ? "You" : tutorName()}:** ${m.text}`);
+lines.push("");
+}
+if (weakTopics.length) {
+lines.push("## Focus Next", ...weakTopics, "");
+}
+return lines.join("\n").trim() + "\n";
+}
+function downloadStudyNotes() {
+downloadTextFile(`${slugOfTitle()}-review.md`, buildStudyNotesMarkdown(), "text/markdown;charset=utf-8");
+}
 function followUpPanel() {
 const thread = h("div", { class: "pen-followup-thread" });
 const renderThread = () => {
@@ -3448,9 +3931,11 @@ const answered = items.filter((it) => it.inks.length || (it.typed && String(it.t
 const fieldLines = items
 .map((it) => {
 const name = it.label ? `${it.q.id} (${it.label})` : it.q.id;
+const pts = it.q.showPoints || it.q.points > 1 ? ` [${it.q.points} pts]` : "";
+const rub = Array.isArray(it.q.rubric) && it.q.rubric.length ? ` | rubric: ${it.q.rubric.join("; ")}` : "";
 const typed = it.typed?.trim() ? ` — typed: ${it.typed.trim()}` : "";
 const state = it.inks.length ? " [handwritten in image]" : typed ? "" : " [blank]";
-return `- ${name}${typed}${state}`;
+return `- ${name}${pts}${rub}${typed}${state}`;
 })
 .join("\n");
 return [
@@ -3599,6 +4084,86 @@ let pinnedInput = null;
 let menuOpen = false;
 let navOpen = false;
 let reviewFilter = "all";
+let focusMode = false;
+let focusIndex = 0;
+function focusGroups() {
+return penInputs().map((p) => {
+const sec = p.closest("section, article, .question");
+if (sec && sec !== document.body && sec.querySelectorAll("pen-input[name]").length === 1) {
+return { el: p, nodes: [sec] };
+}
+const nodes = [...taskNodesFor(p), p];
+const next = p.nextElementSibling;
+if (next && next.matches?.(".pen-feedback, .pen-prev-feedback")) nodes.push(next);
+return { el: p, nodes };
+});
+}
+function toggleFocus(on) {
+const groups = focusGroups();
+const next = typeof on === "boolean" ? on : !focusMode;
+focusMode = next && groups.length > 1;
+document.documentElement.classList.toggle("pen-focus", focusMode);
+try { localStorage.setItem("pen:focus", focusMode ? "1" : "0"); } catch {}
+applyFocusMode();
+refreshTools();
+return focusMode;
+}
+function applyFocusMode() {
+document.querySelectorAll(".pen-focus-hidden").forEach((n) => n.classList.remove("pen-focus-hidden"));
+document.getElementById("pen-focus-bar")?.remove();
+const groups = focusGroups();
+if (!focusMode || groups.length <= 1) {
+document.documentElement.classList.remove("pen-focus");
+return;
+}
+focusIndex = Math.max(0, Math.min(groups.length - 1, focusIndex));
+groups.forEach((g, idx) => {
+if (idx !== focusIndex) g.nodes.forEach((n) => n.classList.add("pen-focus-hidden"));
+});
+const submitEl = document.querySelector("pen-submit");
+if (submitEl) {
+submitEl.classList.toggle("pen-focus-hidden", !graded && focusIndex !== groups.length - 1);
+}
+const cur = groups[focusIndex].el;
+activePad = cur.pad;
+const bar = h(
+"div",
+{ id: "pen-focus-bar", class: "pen-focus-bar", role: "navigation", "aria-label": "Question navigation" },
+h(
+"button",
+{
+type: "button",
+class: "pen-sheet-btn",
+disabled: focusIndex === 0,
+onclick: () => {
+focusIndex = Math.max(0, focusIndex - 1);
+applyFocusMode();
+refreshTools();
+window.scrollTo({ top: 0, behavior: calm() ? "auto" : "smooth" });
+},
+},
+word("prevQ"),
+),
+h("span", { class: "pen-focus-pos" }, `Question ${focusIndex + 1} of ${groups.length}${flagged.has(cur.name) ? " · ⚑" : ""}`),
+h(
+"button",
+{
+type: "button",
+class: "pen-sheet-btn",
+disabled: focusIndex === groups.length - 1,
+onclick: () => {
+focusIndex = Math.min(groups.length - 1, focusIndex + 1);
+applyFocusMode();
+refreshTools();
+window.scrollTo({ top: 0, behavior: calm() ? "auto" : "smooth" });
+},
+},
+word("nextQ"),
+),
+);
+const lastNode = groups[focusIndex].nodes.at(-1);
+if (lastNode) lastNode.after(bar);
+}
 const INK_COLORS = [
 ["#1f2937", "Black ink"],
 ["#1d4ed8", "Blue ink"],
@@ -3671,6 +4236,16 @@ save();
 }
 function scrollToField(el) {
 if (!el) return;
+if (focusMode) {
+const idx = penInputs().indexOf(el);
+if (idx >= 0) {
+focusIndex = idx;
+applyFocusMode();
+refreshTools();
+window.scrollTo({ top: 0, behavior: calm() ? "auto" : "smooth" });
+return;
+}
+}
 const anchor = taskNodesFor(el)[0] ?? el;
 const behavior = calm() || matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth";
 anchor.scrollIntoView({ behavior, block: "start" });
@@ -3702,33 +4277,70 @@ grade: graded?.grades?.[name] ?? null,
 return [...pens, ...typed];
 }
 function buildReviewBar(grades) {
-const entries = Object.values(grades ?? {});
-if (!entries.length) return null;
+const gradeEntries = Object.entries(grades ?? {});
+if (!gradeEntries.length) return null;
 const counts = { correct: 0, partial: 0, incorrect: 0, blank: 0, other: 0 };
-for (const g of entries) {
+const list = fieldSummaries();
+const byId = new Map(list.map((f) => [f.id, f]));
+let earnedPts = 0, possiblePts = 0, scoredCount = 0, flaggedGraded = 0, confidentMistakes = 0;
+for (const [id, g] of gradeEntries) {
 if (g.verdict && g.verdict in counts) counts[g.verdict]++;
 else counts.other++;
+if (flagged.has(id)) flaggedGraded++;
+if (confidences.get(id) === "sure" && (g.verdict === "incorrect" || g.verdict === "partial")) confidentMistakes++;
+const meta = byId.get(id);
+const maxPts = meta?.points ?? 1;
+if (g.verdict || (typeof g.points === "number" && g.points > 0)) {
+earnedPts += Number(g.points) || 0;
+possiblePts += maxPts;
+scoredCount++;
+}
 }
 const pills = [];
+if (scoredCount > 0 && possiblePts > 0) {
+const pct = Math.round((earnedPts / possiblePts) * 100);
+const cleanEarned = Math.round(earnedPts * 10) / 10;
+pills.push(h("span", { class: "pen-score-pill" }, `${cleanEarned} / ${possiblePts} pts · ${pct}%`));
+}
+if (attempts.length >= 2) {
+const first = attempts[0];
+const last = attempts.at(-1);
+const delta = last.pct - first.pct;
+const sign = delta > 0 ? `+${delta}%` : `${delta}%`;
+pills.push(h("span", { class: "pen-progress-pill" }, `📈 ${first.pct}% → ${last.pct}% (${sign})`));
+}
+if (graded?.elapsedSeconds > 0) {
+pills.push(h("span", { class: "pen-time-pill" }, `⏱ ${formatTime(graded.elapsedSeconds)}`));
+}
+if (confidentMistakes > 0) {
+pills.push(h("span", { class: "pen-conf-warn-pill" }, `⚠ ${confidentMistakes} confident mistake${confidentMistakes === 1 ? "" : "s"}`));
+}
 if (counts.correct) pills.push(h("span", { class: "pen-review-pill", "data-verdict": "correct" }, `✓ ${counts.correct}`));
 if (counts.partial) pills.push(h("span", { class: "pen-review-pill", "data-verdict": "partial" }, `◐ ${counts.partial}`));
 if (counts.incorrect) pills.push(h("span", { class: "pen-review-pill", "data-verdict": "incorrect" }, `✗ ${counts.incorrect}`));
 if (counts.blank) pills.push(h("span", { class: "pen-review-pill", "data-verdict": "blank" }, `– ${counts.blank}`));
-if (counts.other && !pills.length) pills.push(h("span", { class: "pen-review-pill" }, `${entries.length} reviewed`));
+if (counts.other && !pills.length) pills.push(h("span", { class: "pen-review-pill" }, `${gradeEntries.length} reviewed`));
 const needsWorkCount = counts.partial + counts.incorrect + counts.blank;
 const setFilter = (mode) => {
 reviewFilter = mode;
-if (mode === "needs-work") document.documentElement.setAttribute("data-review-filter", "needs-work");
-else document.documentElement.removeAttribute("data-review-filter");
+if (mode === "all") document.documentElement.removeAttribute("data-review-filter");
+else document.documentElement.setAttribute("data-review-filter", mode);
 document.querySelectorAll(".pen-filter-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.filter === mode)));
 };
+const showNeedsWork = counts.correct > 0 && needsWorkCount > 0;
+const showFlagged = flaggedGraded > 0 && flaggedGraded < gradeEntries.length;
 const filters =
-counts.correct > 0 && needsWorkCount > 0
+showNeedsWork || showFlagged
 ? h(
 "div",
 { class: "pen-review-filters", role: "group", "aria-label": "Filter feedback" },
-h("button", { type: "button", class: "pen-filter-btn", "data-filter": "all", "aria-pressed": String(reviewFilter === "all"), onclick: () => setFilter("all") }, `${word("reviewAll")} (${entries.length})`),
-h("button", { type: "button", class: "pen-filter-btn", "data-filter": "needs-work", "aria-pressed": String(reviewFilter === "needs-work"), onclick: () => setFilter("needs-work") }, `${word("reviewNeedsWork")} (${needsWorkCount})`),
+h("button", { type: "button", class: "pen-filter-btn", "data-filter": "all", "aria-pressed": String(reviewFilter === "all"), onclick: () => setFilter("all") }, `${word("reviewAll")} (${gradeEntries.length})`),
+showNeedsWork
+? h("button", { type: "button", class: "pen-filter-btn", "data-filter": "needs-work", "aria-pressed": String(reviewFilter === "needs-work"), onclick: () => setFilter("needs-work") }, `${word("reviewNeedsWork")} (${needsWorkCount})`)
+: null,
+showFlagged
+? h("button", { type: "button", class: "pen-filter-btn", "data-filter": "flagged", "aria-pressed": String(reviewFilter === "flagged"), onclick: () => setFilter("flagged") }, `${word("reviewFlagged")} (${flaggedGraded})`)
+: null,
 )
 : null;
 return h("div", { class: "pen-review-bar" }, h("div", { class: "pen-review-pills" }, ...pills), filters);
@@ -3791,13 +4403,24 @@ pinnedInput = pinnedInput === el ? null : el;
 updatePinnedBar();
 }
 const isDark = () => document.documentElement.classList.contains("pen-dark");
+const isRailLeft = () => document.documentElement.classList.contains("pen-rail-left");
 function refreshTools() {
 const hasShared = Boolean(document.querySelector("pen-toolbar"));
 document.documentElement.classList.toggle("pen-has-toolbar", hasShared);
-document.querySelectorAll("pen-input .pen-pen, pen-toolbar .pen-pen").forEach((b) => b.setAttribute("aria-pressed", String(tools.tool === "pen")));
+document.querySelectorAll("pen-input .pen-pen, pen-toolbar .pen-pen").forEach((b) => {
+b.setAttribute("aria-pressed", String(tools.tool === "pen"));
+b.style.setProperty("--active-ink", tools.color);
+});
 document.querySelectorAll("pen-input .pen-eraser, pen-toolbar .pen-eraser").forEach((b) => b.setAttribute("aria-pressed", String(tools.tool === "eraser")));
 document.querySelectorAll("pen-toolbar .pen-eink").forEach((b) => b.setAttribute("aria-pressed", String(calm())));
 document.querySelectorAll("pen-toolbar .pen-dark-btn").forEach((b) => b.setAttribute("aria-pressed", String(isDark())));
+document.querySelectorAll("pen-toolbar .pen-rail-btn").forEach((b) => (b.textContent = word(isRailLeft() ? "railRight" : "railLeft")));
+document.querySelectorAll(".pen-focus-btn").forEach((b) => {
+b.hidden = penInputs().length <= 1;
+b.setAttribute("aria-pressed", String(focusMode));
+b.textContent = word(focusMode ? "focusOff" : "focusOn");
+});
+document.querySelectorAll("pen-header").forEach((hdr) => hdr.refreshMeta?.());
 document.querySelectorAll("pen-toolbar .pen-fingers").forEach((b) => (b.textContent = word(fingersDraw() ? "fingerDraws" : "fingerScrolls")));
 document.querySelectorAll("pen-toolbar .pen-swatch").forEach((b) => b.setAttribute("aria-pressed", String(tools.color === b.dataset.color)));
 document.querySelectorAll("pen-toolbar .pen-nib").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.size) === tools.size)));
@@ -3820,6 +4443,11 @@ p.flagBtn?.setAttribute("aria-pressed", String(isFlagged));
 p.flagBtn?.setAttribute("title", word(isFlagged ? "unflag" : "flag"));
 p.pad.el.classList.toggle("pen-pad-flagged", isFlagged);
 }
+const canSwitchPaper = Boolean(pad && !pad.figure && !pad.readOnly);
+document.querySelectorAll("pen-toolbar .pen-paper-row").forEach((row) => (row.hidden = !canSwitchPaper));
+if (canSwitchPaper) {
+document.querySelectorAll("pen-toolbar .pen-paper-btn").forEach((b) => b.setAttribute("aria-pressed", String(pad.paper === b.dataset.paper)));
+}
 document.querySelectorAll("pen-toolbar .pen-undo").forEach((b) => (b.disabled = !pad || !pad.canUndo || pad.readOnly));
 document.querySelectorAll("pen-toolbar .pen-redo").forEach((b) => (b.disabled = !pad || !pad.canRedo || pad.readOnly));
 document.querySelectorAll("pen-toolbar .pen-clear").forEach((b) => (b.disabled = !pad || pad.isEmpty || pad.readOnly));
@@ -3827,6 +4455,7 @@ const list = fieldSummaries();
 const total = list.length;
 const answeredCount = list.filter((f) => f.answered).length;
 const flaggedCount = list.filter((f) => f.flagged).length;
+const totalExplicitPts = list.reduce((sum, f) => sum + (f.points ?? 0), 0);
 const solidCount = graded ? list.filter((f) => f.grade?.verdict === "correct").length : 0;
 const navLabel = graded
 ? solidCount || Object.keys(graded.grades ?? {}).length
@@ -3840,6 +4469,14 @@ b.classList.toggle("pen-nav-has-flag", flaggedCount > 0 && !graded);
 b.classList.toggle("pen-nav-done", !graded && total > 0 && answeredCount === total);
 });
 if (navOpen) {
+const pct = total > 0 ? Math.round(((graded ? solidCount : answeredCount) / total) * 100) : 0;
+document.querySelectorAll("pen-toolbar .pen-nav-total-pts").forEach((el) => {
+el.textContent = totalExplicitPts > 0 ? `${totalExplicitPts} pts` : "";
+el.hidden = totalExplicitPts <= 0;
+});
+document.querySelectorAll("pen-toolbar .pen-nav-progress-fill").forEach((el) => {
+el.style.width = `${pct}%`;
+});
 document.querySelectorAll("pen-toolbar .pen-nav-list").forEach((ul) => {
 ul.replaceChildren(
 ...list.map((f) => {
@@ -3858,6 +4495,11 @@ const icon = f.grade
 : f.answered
 ? "●"
 : "○";
+const rightText = f.grade && f.points && (f.grade.verdict || f.grade.points > 0)
+? `${f.grade.points}/${f.points}p`
+: f.points
+? `${f.points}p`
+: "";
 return h(
 "button",
 {
@@ -3872,10 +4514,29 @@ scrollToField(f.el);
 },
 h("span", { class: "pen-nav-icon", "aria-hidden": "true" }, icon),
 h("span", { class: "pen-nav-text" }, `${f.index}. ${f.label}`),
-f.points ? h("span", { class: "pen-nav-pts" }, `${f.points}p`) : null,
+rightText ? h("span", { class: "pen-nav-pts" }, rightText) : null,
 );
 }),
 );
+});
+const nextTarget = graded
+? list.find((f) => f.grade && f.grade.verdict && f.grade.verdict !== "correct")
+: list.find((f) => f.flagged) ?? list.find((f) => !f.answered);
+const jumpLabel = !nextTarget
+? ""
+: graded
+? `Next to review (#${nextTarget.index}) →`
+: nextTarget.flagged
+? `Next flagged ⚑ (#${nextTarget.index}) →`
+: `Next unanswered (#${nextTarget.index}) →`;
+document.querySelectorAll("pen-toolbar .pen-nav-jump").forEach((btn) => {
+btn.hidden = !nextTarget;
+btn.textContent = jumpLabel;
+btn.onclick = () => {
+navOpen = false;
+refreshTools();
+if (nextTarget) scrollToField(nextTarget.el);
+};
 });
 }
 document.querySelectorAll("pen-submit .pen-readiness").forEach((el) => {
@@ -3884,8 +4545,9 @@ el.hidden = true;
 return;
 }
 el.hidden = false;
+const ptsSuffix = totalExplicitPts > 0 ? ` · ${totalExplicitPts} pts` : "";
 const base = answeredCount === total ? `All ${total} answered ✓` : `${answeredCount} of ${total} answered`;
-el.textContent = flaggedCount ? `${base} · ${flaggedCount} flagged ⚑` : base;
+el.textContent = flaggedCount ? `${base} · ${flaggedCount} flagged ⚑` : `${base}${ptsSuffix}`;
 el.classList.toggle("pen-readiness-all", answeredCount === total && !flaggedCount);
 });
 refreshTimerUI();
@@ -3931,6 +4593,19 @@ document.documentElement.classList.toggle("pen-dark", next);
 try { localStorage.setItem("pen:dark", next ? "1" : "0"); } catch {}
 refreshTools();
 };
+const toggleRail = () => {
+const next = !isRailLeft();
+document.documentElement.classList.toggle("pen-rail-left", next);
+try { localStorage.setItem("pen:rail", next ? "left" : "right"); } catch {}
+refreshTools();
+};
+const setPaper = (paper) => () => {
+const pad = currentPad();
+if (!pad || pad.figure || pad.readOnly) return;
+pad.setPaper(paper);
+refreshTools();
+save();
+};
 const toggleFingers = () => {
 tools.fingers = fingersDraw() ? "scroll" : "draw";
 refreshTools();
@@ -3974,7 +4649,13 @@ onclick: () => (timerRunning ? pauseTimer() : startTimer()),
 },
 "0:00",
 ),
-iconBtn("pen-pen", "✎", word("pen"), pick("pen")),
+h(
+"button",
+{ type: "button", class: "pen-pen", title: word("pen"), "aria-label": word("pen"), onclick: pick("pen") },
+h("span", { "aria-hidden": "true" }, "✎"),
+h("span", { class: "pen-ink-dot", "aria-hidden": "true" }),
+h("span", { class: "pen-sr" }, word("pen")),
+),
 iconBtn("pen-eraser", "⌫", word("eraser"), pick("eraser")),
 iconBtn("pen-undo", "↶", word("undo"), () => (currentPad()?.undo(), refreshTools())),
 iconBtn("pen-redo", "↷", word("redo"), () => (currentPad()?.redo(), refreshTools())),
@@ -3986,8 +4667,10 @@ refreshTools();
 h(
 "div",
 { class: "pen-nav-popover", hidden: !navOpen },
-h("div", { class: "pen-nav-head" }, h("strong", {}, "Questions")),
+h("div", { class: "pen-nav-head" }, h("strong", {}, "Questions"), h("span", { class: "pen-nav-total-pts", hidden: true })),
+h("div", { class: "pen-nav-progress", "aria-hidden": "true" }, h("div", { class: "pen-nav-progress-fill" })),
 h("div", { class: "pen-nav-list" }),
+h("button", { type: "button", class: "pen-nav-jump", hidden: true }),
 ),
 h(
 "div",
@@ -4021,6 +4704,13 @@ h("button", { type: "button", class: "pen-nib", "data-size": String(size), title
 ),
 h(
 "div",
+{ class: "pen-paper-row", role: "group", "aria-label": "Paper style" },
+h("button", { type: "button", class: "pen-paper-btn", "data-paper": "ruled", onclick: setPaper("ruled") }, word("paperRuled")),
+h("button", { type: "button", class: "pen-paper-btn", "data-paper": "grid", onclick: setPaper("grid") }, word("paperGrid")),
+h("button", { type: "button", class: "pen-paper-btn", "data-paper": "blank", onclick: setPaper("blank") }, word("paperBlank")),
+),
+h(
+"div",
 { class: "pen-timer-row" },
 menuBtn("pen-timer-toggle", "⏱ Start timer", () => (timerRunning ? pauseTimer() : startTimer())),
 h("button", { type: "button", class: "pen-timer-reset", hidden: true, title: "Reset timer", onclick: resetTimer }, "↺"),
@@ -4028,6 +4718,8 @@ h("button", { type: "button", class: "pen-timer-reset", hidden: true, title: "Re
 h("hr", { class: "pen-menu-sep" }),
 menuBtn("pen-eink", word("eInk"), toggleEink),
 menuBtn("pen-dark-btn", word("dark"), toggleDark),
+menuBtn("pen-focus-btn", word(focusMode ? "focusOff" : "focusOn"), () => ((menuOpen = false), toggleFocus())),
+menuBtn("pen-rail-btn", word(isRailLeft() ? "railRight" : "railLeft"), toggleRail),
 menuBtn("pen-fingers", word(fingersDraw() ? "fingerDraws" : "fingerScrolls"), toggleFingers),
 menuBtn("pen-boox-menu", word("booxPdf"), () => ((menuOpen = false), refreshTools(), downloadBooxPdf())),
 menuBtn("pen-ai-menu", word("copyForAi"), () => ((menuOpen = false), refreshTools(), exportForAI())),
@@ -4037,6 +4729,61 @@ menuBtn("pen-clear", word("clear"), clearPad),
 ),
 );
 refreshTools();
+}
+}
+class PenHeaderElement extends HTMLElement {
+connectedCallback() {
+if (this.querySelector(".pen-header-card")) return;
+const title = this.getAttribute("title") || document.title || "Worksheet";
+const subtitle = this.getAttribute("subtitle") || this.textContent.trim();
+const askName = this.hasAttribute("student-name");
+this.metaRow = h("div", { class: "pen-header-meta" });
+const nameInput = askName
+? h("input", {
+type: "text",
+class: "pen-student-input",
+placeholder: word("studentNamePlaceholder"),
+value: studentName,
+oninput: (e) => {
+studentName = e.target.value;
+save();
+},
+})
+: null;
+this.replaceChildren(
+h(
+"header",
+{ class: "pen-header-card" },
+h(
+"div",
+{ class: "pen-header-top" },
+h(
+"div",
+{ class: "pen-header-titles" },
+h("h1", { class: "pen-header-title" }, title),
+subtitle ? h("p", { class: "pen-header-sub" }, subtitle) : null,
+),
+h("button", { type: "button", class: "pen-sheet-btn pen-focus-btn", onclick: () => toggleFocus() }, word(focusMode ? "focusOff" : "focusOn")),
+),
+h(
+"div",
+{ class: "pen-header-bottom" },
+this.metaRow,
+nameInput ? h("label", { class: "pen-student-wrap" }, h("span", {}, "Name:"), nameInput) : null,
+),
+),
+);
+this.refreshMeta();
+}
+refreshMeta() {
+if (!this.metaRow) return;
+const list = fieldSummaries();
+const totalPts = list.reduce((sum, f) => sum + (f.points ?? 0), 0);
+const chips = [];
+if (list.length) chips.push(h("span", { class: "pen-meta-chip" }, `${list.length} question${list.length === 1 ? "" : "s"}`));
+if (totalPts > 0) chips.push(h("span", { class: "pen-meta-chip" }, `${totalPts} pts`));
+if (timerCountdown > 0) chips.push(h("span", { class: "pen-meta-chip" }, `⏱ ${Math.round(timerCountdown / 60)} min`));
+this.metaRow.replaceChildren(...chips);
 }
 }
 class PenInputElement extends HTMLElement {
@@ -4049,11 +4796,12 @@ this.figureKnown = true;
 const figure = this.figureSource;
 const restored = this.detachedInk;
 const before = restored ?? saved.pens?.[this.name];
+const savedPaper = !figure ? saved.papers?.[this.name] : null;
 this.pad = new InkPad({
 calm,
 readOnly: inputsLocked,
 height: before?.height ?? (figure ? 0 : Number(this.getAttribute("height")) || 400),
-paper: this.getAttribute("paper") ?? (figure ? "blank" : "ruled"),
+paper: savedPaper ?? this.getAttribute("paper") ?? (figure ? "blank" : "ruled"),
 background: figure,
 strokes: before?.strokes,
 onActivate: (pad) => {
@@ -4075,7 +4823,7 @@ refreshTools();
 };
 this.undoBtn = button("pen-undo", word("undo"), () => (this.pad.undo(), refreshTools()));
 this.redoBtn = button("pen-redo", word("redo"), () => (this.pad.redo(), refreshTools()));
-this.pad.el.dataset.emptyHint = word("writeHere");
+this.pad.el.dataset.emptyHint = this.getAttribute("placeholder") || word("writeHere");
 if (this.hasAttribute("points")) {
 const pts = pointsOf(this);
 this.pad.el.append(h("span", { class: "pen-pad-pts", "aria-hidden": "true" }, `${pts} pt${pts === 1 ? "" : "s"}`));
@@ -4137,6 +4885,50 @@ this.pad.addSpace();
 ),
 );
 }
+const rubric = rubricOf(this);
+const rubricBar = rubric
+? h(
+"div",
+{ class: "pen-rubric", "aria-label": word("rubricLabel") },
+...rubric.map((item) => h("span", { class: "pen-rubric-item" }, rich(item, "pen-inline"))),
+)
+: null;
+const hintText = this.getAttribute("hint")?.trim();
+const hintBox = hintText
+? h("details", { class: "pen-hint-box" }, h("summary", {}, word("hintTitle")), richMarkdown(hintText, "pen-md"))
+: null;
+const askConfidence = this.hasAttribute("confidence") || Boolean(document.querySelector("pen-submit[confidence]"));
+const confBox =
+askConfidence && this.name
+? (() => {
+const group = h(
+"div",
+{ class: "pen-confidence", role: "group", "aria-label": word("confidencePrompt") },
+h("span", { class: "pen-confidence-label" }, word("confidencePrompt")),
+...["guess", "unsure", "sure"].map((lvl) =>
+h(
+"button",
+{
+type: "button",
+class: "pen-conf-btn",
+"data-level": lvl,
+"aria-pressed": String(confidences.get(this.name) === lvl),
+disabled: inputsLocked,
+onclick: () => {
+if (inputsLocked) return;
+if (confidences.get(this.name) === lvl) confidences.delete(this.name);
+else confidences.set(this.name, lvl);
+group.querySelectorAll(".pen-conf-btn").forEach((b) => b.setAttribute("aria-pressed", String(confidences.get(this.name) === b.dataset.level)));
+save();
+},
+},
+word(lvl),
+),
+),
+);
+return group;
+})()
+: null;
 this.replaceChildren(
 h(
 "div",
@@ -4146,7 +4938,10 @@ button("pen-eraser", word("eraser"), pick("eraser")),
 this.undoBtn,
 this.redoBtn,
 ),
+...(rubricBar ? [rubricBar] : []),
 this.pad.el,
+...(confBox ? [confBox] : []),
+...(hintBox ? [hintBox] : []),
 );
 refreshTools();
 if (graded) showFeedback();
@@ -4187,13 +4982,15 @@ return {
 name: el.name || `q${i + 1}`,
 heading: headingEl?.textContent?.trim() || el.getAttribute("label") || `${i + 1}. ${el.name || `q${i + 1}`}`,
 prompt: promptText,
-paper: el.getAttribute("paper") || (el.figureSource ? "blank" : "ruled"),
+points: el.hasAttribute("points") ? pointsOf(el) : 0,
+rubric: rubricOf(el),
+paper: el.pad?.paper || el.getAttribute("paper") || (el.figureSource ? "blank" : "ruled"),
 height: Number(el.getAttribute("height")) || el.pad?.height || 400,
 figureSvg: el.figureSource || null,
 existingPng: !el.pad?.isEmpty ? el.pad.toPNG()?.png ?? null : null,
 };
 });
-const blob = await exportWorksheetPdf({ title: document.title || "Stylus Worksheet", fields: pdfFields });
+const blob = await exportWorksheetPdf({ title: document.title || "Stylus Worksheet", studentName, fields: pdfFields });
 const slug = (document.title || "worksheet").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "worksheet";
 const url = URL.createObjectURL(blob);
 const a = document.createElement("a");
@@ -4229,8 +5026,15 @@ async function gradeFiles(fileList) {
 const raw = [...(fileList ?? [])].filter(Boolean);
 if (!raw.length) return null;
 const items = [
-...penInputs().map((p) => ({ q: { id: p.name, points: 1 }, label: labelOf(p), inks: [] })),
-...controlNames().map((name) => ({ q: { id: name, points: 1 }, label: labelOf(controls(name)[0]), typed: controlValue(name), inks: [] })),
+...penInputs().map((p) => {
+const rubric = rubricOf(p);
+return { q: { id: p.name, points: pointsOf(p), showPoints: p.hasAttribute("points"), ...(rubric ? { rubric } : {}) }, label: labelOf(p), inks: [] };
+}),
+...controlNames().map((name) => {
+const el = controls(name)[0];
+const rubric = rubricOf(el);
+return { q: { id: name, points: pointsOf(el), showPoints: Boolean(el?.hasAttribute?.("points")), ...(rubric ? { rubric } : {}) }, label: labelOf(el), typed: controlValue(name), inks: [] };
+}),
 ];
 const files = [];
 for (const f of raw) {
@@ -4273,6 +5077,7 @@ f.mediaType.startsWith("image/")
 return null;
 }
 const mine = ++run;
+const elapsedSeconds = captureElapsedTime();
 lock(true);
 status(h("p", { class: "pen-thinking" }, word("checking")));
 try {
@@ -4300,7 +5105,8 @@ parsed = { markdown: rawText, questions: [], summary: "" };
 const normalized = normalizeGrades(parsed, items.map((it) => it.q));
 const { grades, summary } = normalized;
 const markdown = normalized.markdown || parsed?.markdown || "";
-graded = { grades, summary, marks: {}, ...(markdown ? { markdown } : {}) };
+graded = { grades, summary, marks: {}, ...(markdown ? { markdown } : {}), ...(elapsedSeconds > 0 ? { elapsedSeconds } : {}) };
+recordAttempt(graded);
 showFeedback();
 save();
 return graded;
@@ -4336,7 +5142,7 @@ h(
 h(
 "div",
 { class: "pen-submit-primary" },
-h("button", { type: "button", class: "pen-send", disabled: inputsLocked, hidden: Boolean(graded), onclick: handIn }, text),
+h("button", { type: "button", class: "pen-send", "data-label": text, disabled: inputsLocked, hidden: Boolean(graded), onclick: requestHandIn }, text),
 h("span", { class: "pen-readiness", hidden: true }),
 ),
 h(
@@ -4358,6 +5164,11 @@ refreshTools();
 const PenSheet = {
 handIn,
 reopen,
+retryMissed,
+studyNotes: buildStudyNotesMarkdown,
+followUpPrompt: buildFollowUpDrillPrompt,
+attempts: () => [...attempts],
+toggleFocus,
 downloadBooxPdf,
 gradeFiles,
 exportForAI,
@@ -4383,6 +5194,8 @@ const savedEink = localStorage.getItem("pen:eink");
 if (savedEink === "1") document.documentElement.classList.add("hwq-eink");
 else if (savedEink === "0") document.documentElement.classList.remove("hwq-eink");
 if (localStorage.getItem("pen:dark") === "1") document.documentElement.classList.add("pen-dark");
+if (localStorage.getItem("pen:rail") === "left") document.documentElement.classList.add("pen-rail-left");
+if (localStorage.getItem("pen:focus") === "1") focusMode = true;
 } catch {}
 try {
 saved = JSON.parse((await Promise.race([storage.get(storeKey()), new Promise((resolve) => setTimeout(() => resolve(null), 1500))])) ?? "{}") ?? {};
@@ -4392,6 +5205,14 @@ saved = {};
 if (Array.isArray(saved.flagged)) {
 for (const id of saved.flagged) flagged.add(String(id));
 }
+if (saved.confidence && typeof saved.confidence === "object") {
+for (const [k, v] of Object.entries(saved.confidence)) {
+if (v === "guess" || v === "unsure" || v === "sure") confidences.set(k, v);
+}
+}
+if (typeof saved.studentName === "string") studentName = saved.studentName;
+if (Array.isArray(saved.attempts)) attempts = saved.attempts.slice(-10);
+if (!customElements.get("pen-header")) customElements.define("pen-header", PenHeaderElement);
 if (!customElements.get("pen-toolbar")) customElements.define("pen-toolbar", PenToolbarElement);
 if (!customElements.get("pen-input")) customElements.define("pen-input", PenInputElement);
 if (!customElements.get("pen-submit")) customElements.define("pen-submit", PenSubmitElement);
@@ -4406,10 +5227,12 @@ refreshTools();
 }
 });
 document.addEventListener("keydown", onUndoRedoKey);
+if (focusMode) applyFocusMode();
 refreshTools();
 if (saved.graded) {
 graded = saved.graded;
 showFeedback();
+if (focusMode) applyFocusMode();
 }
 }
 function onUndoRedoKey(e) {

@@ -56,23 +56,40 @@ Before writing HTML, design prompts where **handwriting pays off**:
 
 ### Component attributes
 
+- **`<pen-header>`** (optional zero-boilerplate exam cover strip):
+  - Automatically renders the title (`title="..."` or `<title>`), `subtitle="..."`, live metadata chips (`3 questions`, `10 pts`, `⏱ 15 min`), a **`🎯 Focus mode`** toggle (one question at a time for zero e-ink scroll ghosting), and an optional `student-name` input (persisted across reloads, automatically stamped into exported PDFs and Markdown Study Notes, never treated as a graded question).
 - **`<pen-toolbar>`**:
-  - Compact floating right-side rail with live **Question Navigator** (`2/6` jump list + flag & verdict indicators), Pen / Eraser / Undo / Redo, and `⚙` menu (ink colors & nib sizes, optional exam timer, E-ink, Dark mode, Finger-scroll, Download PDF, Copy for AI, Grader setup, Clear).
-  - `timer`: optional exam countdown in minutes (e.g. `<pen-toolbar timer="30">` pre-loads a 30:00 countdown; omit for an optional count-up stopwatch).
+  - Compact floating rail (dockable to **right or left** via `⚙ → ⇄ Toolbar on left` for right- and left-handed writers) with live **Question Navigator** (`2/6` progress bar, total points, flag & verdict indicators, and 1-tap `Next flagged / unanswered / to review →` jump), Pen (with live active ink color dot) / Eraser / Undo / Redo, and `⚙` menu (ink colors & nib sizes, active-pad `Ruled / Grid / Blank` paper switcher, optional exam timer, **🎯 Focus mode**, E-ink, Dark mode, Finger-scroll, Download PDF, Copy for AI, Grader setup, Clear).
+  - `timer`: optional exam countdown in minutes (e.g. `<pen-toolbar timer="30">` pre-loads a 30:00 countdown; omit for an optional count-up stopwatch). Elapsed time is automatically captured on hand-in and shown in the post-exam scorecard.
 - **`<pen-input>`**:
   - `name` (required): stable id used for autosave, PDF box tagging, and grading.
-  - `label`: human-readable title shown in the Question Navigator, Answer Sheets, and sent to the grader.
-  - `points`: optional point weight (e.g. `points="4"` displays a crisp `4 pts` pill and passes points to the grader).
+  - `label`: human-readable title shown in the Question Navigator, Answer Sheets, Study Notes, and sent to the grader.
+  - `points`: optional point weight (e.g. `points="4"` displays a crisp `4 pts` pill, sums into total exam points, renders `[4 pts]` + `Score: ___ / N` in exported PDFs, and scores earned points in the post-exam review bar).
+  - `rubric`: optional grading criteria separated by `|` or `;` (e.g. `rubric="State base case | Prove inductive step | Conclude"`). Shown upfront as scannable checklist chips above the pad (raises performance), included in PDF exports, passed to the AI grader, and ticked (`✓`) when met!
+  - `hint`: optional progressive hint hidden inside a collapsed **💡 Need a hint?** disclosure below the pad (supports Markdown + `$math$`, works 100% offline, hidden in print). Omit on closed-book exams.
+  - `confidence`: boolean attribute (or set `confidence` on `<pen-submit>` to enable on all pads) adding quiet `Guess / Unsure / Sure` calibration chips below the pad. Sent to the grader to highlight **confident mistakes** (the highest-value learning moments) and surfaced in the post-exam review bar.
+  - `placeholder`: optional custom empty-canvas prompt (defaults to `"Write here…"`).
   - `paper`: `"ruled"` (default), `"grid"`, or `"blank"`.
   - `height`: paper height in units (width is always `1000`; `360`–`550` is comfortable and auto-grows as you write near the bottom).
   - An inline `<svg viewBox="...">` inside `<pen-input>` becomes the drawable diagram background.
-  - Built-in corner actions: **`⚑` Flag for review** (persisted across reloads and surfaced in the Question Navigator + readiness pill), **`📌` Pin task**, and **`+` More room**.
+  - Built-in corner actions: **`⚑` Flag for review** (persisted across reloads, surfaced in the Question Navigator, readiness pill, pre-submit exam guard, and post-exam `⚑ Flagged` filter), **`📌` Pin task**, and **`+` More room**.
 - **`<pen-submit>`**:
+  - Built-in **pre-submit exam guard**: if questions are unanswered or flagged, tapping Hand in opens a calm inline warning (`Jump to #N` or `Hand in anyway`) instead of locking the sheet prematurely.
+  - Built-in **post-exam review & spaced-repetition suite**: total score & percentage (`7.5 / 10 pts · 75%`), **attempt progression** across retries (`📈 60% → 90% (+30%)`), elapsed time, confident-mistake calibration alert, `All / Needs work / ⚑ Flagged` filters, **`↻ Retry missed (N)`** (keeps `✓ Correct` answers locked while revising only missed items!), **`⚡ Practice weak spots`** (copies a surgical follow-up worksheet prompt targeting ONLY missed/flagged/confident-mistake gaps), **`📝 Copy study notes`**, **`⬇ Save report (.md)`**, **`🖨 Print / Save review`**, and interactive follow-up tutor chat.
   - `mode`: `"coach"` (**default** — open educational coaching with rich Markdown, custom badges, collapsible `nudge` & `solution`, and follow-up tutor chat), `"free"` (pure narrative Markdown teacher letter), or `"strict"` (classic 4-verdict `correct | partial | incorrect | blank` scoring).
   - `prompt`: optional per-worksheet pedagogy or rubric instructions (e.g. `prompt="Use Socratic hints first; never reveal the final formula unless the student is completely stuck."`).
   - `endpoint`: optional HTTPS grading server URL (or `<meta name="pen-endpoint">`).
   - `agent`: optional tutor display name (`"Coach"`, `"Prof. Ada"`, etc.).
-- **E-ink & Dark mode**: add `class="hwq-eink"` on `<html>` for e-ink tablets (Onyx Boox, reMarkable, Supernote). Users can also toggle E-ink, Dark mode, Finger-scroll, Download PDF, Copy for AI, and Grader Setup from the floating `⚙` rail.
+- **E-ink & Dark mode**: add `class="hwq-eink"` on `<html>` for e-ink tablets (Onyx Boox, reMarkable, Supernote). Users can also toggle E-ink, Dark mode, Left/Right rail, Finger-scroll, Download PDF, Copy for AI, and Grader Setup from the floating `⚙` rail.
+
+## 2b. Worksheet Design Blueprints (pick the right structure for the user's goal)
+
+| Goal | Attributes & Structure to Use |
+|---|---|
+| **Exam Simulation / Midterm Prep** | `<pen-toolbar timer="30">`, explicit `points="..."` on every `<pen-input>` (summing to a clean 10, 20, or 100), concise `rubric="..."` criteria on multi-step proofs/derivations, **no** `hint` attributes, `<pen-submit mode="coach">` or `mode="strict"`. |
+| **Guided Practice / Homework** | Omit `timer`, add progressive `hint="..."` on tricky questions (never give away the final number — nudge the first step), include `rubric="..."` for worked solutions, mix a faded worked example + a "Find the mistake" problem + a transfer problem. |
+| **Visual / Diagram Worksheet** | Embed clean inline `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 W H">` inside `<pen-input>`: pure `#000`/`#333` strokes (≥ 2px), legible `font-size >= 16`, generous whitespace for handwriting, and **never** draw the answer inside the SVG. |
+| **Language Learning Drill** | Set `<html lang="de" data-feedback-lang="en">` (or student's native language) so prompts stay in the target language while coaching explains grammar/accents/capitals in the learner's home language; use `paper="ruled"`. |
 
 ## 3. Pedagogical freedom & educational grading
 

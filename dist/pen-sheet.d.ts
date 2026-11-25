@@ -43,6 +43,7 @@ export interface FieldGrade {
   solution?: string;
   correctAnswer?: string;
   nextTime?: string;
+  met?: number[];
   marks?: RedPenMark[];
 }
 
@@ -76,6 +77,17 @@ export interface GradeResult {
   summary: string;
   markdown?: string;
   marks: Record<string, unknown[]>;
+  elapsedSeconds?: number;
+}
+
+export interface AttemptRecord {
+  at: string;
+  earned: number;
+  possible: number;
+  pct: number;
+  correct: number;
+  total: number;
+  elapsedSeconds?: number;
 }
 
 export interface PenSheetAPI {
@@ -83,12 +95,17 @@ export interface PenSheetAPI {
   canGrade(): boolean;
   handIn(): Promise<GradeResult | null>;
   reopen(): void;
+  retryMissed(): void;
+  studyNotes(): string;
+  followUpPrompt(): string;
+  attempts(): AttemptRecord[];
+  toggleFocus(on?: boolean): boolean;
   downloadBooxPdf(): Promise<Blob | null>;
   gradeFiles(files: FileList | File[]): Promise<GradeResult | null>;
-  exportForAI(): Promise<Array<{ q: { id: string; points: number }; label: string; typed?: string; inks: PenImage[] }> | null>;
+  exportForAI(): Promise<Array<{ q: { id: string; points: number; showPoints?: boolean; rubric?: string[] }; label: string; typed?: string; confidence?: "guess" | "unsure" | "sure"; inks: PenImage[] }> | null>;
   openGraderSetup(): void;
   ask(prompt: string): Promise<string>;
-  fields(): Array<{ q: { id: string; points: number }; label: string; typed?: string; inks: PenImage[] }>;
+  fields(): Array<{ q: { id: string; points: number; showPoints?: boolean; rubric?: string[] }; label: string; typed?: string; confidence?: "guess" | "unsure" | "sure"; inks: PenImage[] }>;
   InkPad: unknown;
   tools: { tool: string; color: string; size: number; fingers: string; scratchOut: boolean; penSeen: boolean };
 }

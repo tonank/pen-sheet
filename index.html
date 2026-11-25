@@ -14,30 +14,56 @@
       background: #fff;
       color: #000;
     }
-    h1 { margin: 0.75rem 0 0.25rem; font-size: 1.4rem; }
-    .note { margin: 0 0 1rem; font-size: 0.95rem; }
+    .note { margin: 0 0 1rem; font-size: 0.92rem; opacity: 0.85; }
+    .gallery { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0 0 1.15rem; font-size: 0.86rem; }
+    .gallery a { color: inherit; padding: 0.2rem 0.55rem; border: 1px solid currentColor; border-radius: 999px; text-decoration: none; }
     section { margin: 1.25rem 0; }
     h2 { font-size: 1.05rem; margin: 0 0 0.35rem; }
+    @media print { .note, .gallery { display: none !important; } }
   </style>
 </head>
 <body>
-  <pen-toolbar></pen-toolbar>
-  <h1>Notebook Stylus Test</h1>
-  <p class="note">Write directly with your stylus (scribble to erase; hold a line to straighten). Tap <strong>⚙ → 🤖 Grader setup</strong> to connect your own ChatGPT, Gemini, or Claude key for live Socratic coaching, or use <strong>📋 Copy for AI</strong> / <strong>📄 Download PDF</strong>.</p>
+  <pen-toolbar timer="15"></pen-toolbar>
+  <pen-header subtitle="Write with your stylus — scribble to erase, hold a line to straighten, tap ⚑ to flag, or 🎯 Focus mode for one question at a time." student-name></pen-header>
+  <nav class="gallery" aria-label="More worksheet examples">
+    <span>Try another subject:</span>
+    <a href="./examples/algorithms-midterm.html">Algorithms Midterm</a>
+    <a href="./examples/calculus-physics.html">Calculus &amp; Physics</a>
+    <a href="./examples/language-journal.html">German Journal</a>
+  </nav>
+  <p class="note">Connect your own ChatGPT, Gemini, or Claude key via <strong>⚙ → 🤖 Grader setup</strong> for live Socratic coaching, or use <strong>📋 Copy for AI</strong> / <strong>📄 Download PDF</strong>.</p>
 
   <section>
     <h2>1. Solve for x and show each step: 3(x − 4) = 15</h2>
-    <pen-input name="q1" label="Solve 3(x - 4) = 15" points="4" paper="grid" height="420"></pen-input>
+    <pen-input
+      name="q1"
+      label="Solve 3(x - 4) = 15"
+      points="4"
+      rubric="Distribute or divide first | Isolate x cleanly | Check the answer"
+      hint="You can either expand $3(x - 4)$ first, or divide both sides by $3$ right away."
+      placeholder="Show each algebra step…"
+      paper="grid"
+      height="420"
+      confidence
+    ></pen-input>
   </section>
 
   <section>
     <h2>2. Explain in one sentence why e-ink is comfortable for reading:</h2>
-    <pen-input name="q2" label="Why e-ink is comfortable" points="3" paper="ruled" height="300"></pen-input>
+    <pen-input
+      name="q2"
+      label="Why e-ink is comfortable"
+      points="3"
+      rubric="Mention reflected ambient light | Compare with backlit screens"
+      paper="ruled"
+      height="300"
+      confidence
+    ></pen-input>
   </section>
 
   <section>
     <h2>3. Mark −1.5 and 2.25 on the number line:</h2>
-    <pen-input name="q3" label="Number line" points="3">
+    <pen-input name="q3" label="Number line" points="3" rubric="Place −1.5 halfway between −2 and −1 | Place 2.25 a quarter past 2" confidence>
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 130">
         <line x1="24" y1="72" x2="396" y2="72" stroke="#000" stroke-width="2"/>
         <line x1="60" y1="62" x2="60" y2="82" stroke="#000" stroke-width="2"/><text x="60" y="104" text-anchor="middle" font-family="sans-serif" font-size="18">-3</text>
