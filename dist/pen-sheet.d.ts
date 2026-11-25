@@ -100,6 +100,10 @@ export interface PenSheetAPI {
   followUpPrompt(): string;
   attempts(): AttemptRecord[];
   toggleFocus(on?: boolean): boolean;
+  openScratchpad(): void;
+  exportState(): Record<string, unknown>;
+  importState(input: string | Record<string, unknown>): boolean;
+  downloadBackup(): void;
   downloadBooxPdf(): Promise<Blob | null>;
   gradeFiles(files: FileList | File[]): Promise<GradeResult | null>;
   exportForAI(): Promise<Array<{ q: { id: string; points: number; showPoints?: boolean; rubric?: string[] }; label: string; typed?: string; confidence?: "guess" | "unsure" | "sure"; inks: PenImage[] }> | null>;

@@ -2907,7 +2907,7 @@ const { InkPad, fingersDraw, tools } = __mod_ink;
 const { watchDevice } = __mod_device;
 const { exportWorksheetPdf } = __mod_pdf;
 const { activeByok, askClaude, configureTutor, documentPageRequest, expectsGrades, followUpRequest, isArtifactHost, marksToPaper, normalizeGrades, pageRequest, parseReply, PROVIDER_MODELS, localAgent, reportProgress, savedGraderConfig, saveGraderConfig, tutorAvailable, tutorName, watchForNewQuiz, whenAgentAway } = __mod_tutor;
-const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #ffffff;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\nposition: relative;\nz-index: 1;\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.inkpad .predict {\nz-index: 2;\n}\n.inkpad .marks {\nz-index: 3;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\nz-index: 0;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.28) calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad,\nhtml.pen-dark .inkpad {\nbackground-color: #17191e !important;\nborder-color: #323742 !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-ruled,\nhtml.pen-dark .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.12) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-grid,\nhtml.pen-dark .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad canvas,\nhtml[data-darkreader-scheme=\"dark\"] .inkpad .figure-bg,\nhtml.pen-dark .inkpad canvas,\nhtml.pen-dark .inkpad .figure-bg {\nfilter: invert(0.92) hue-rotate(180deg);\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks path,\nhtml.pen-dark .marks path {\nstroke: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks text,\nhtml.pen-dark .marks text {\nfill: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks .mark-note,\nhtml.pen-dark .marks .mark-note {\ncolor: #fca5a5;\ntext-shadow: 0 0 4px #17191e, 0 0 4px #17191e, 0 0 4px #17191e;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\n.pen-sr {\nposition: absolute;\nwidth: 1px;\nheight: 1px;\noverflow: hidden;\nclip-path: inset(50%);\nwhite-space: nowrap;\n}\npen-toolbar {\nposition: fixed;\nright: 6px;\ntop: 50%;\ntransform: translateY(-50%);\nz-index: 30;\n}\nhtml.pen-rail-left pen-toolbar {\nright: auto;\nleft: 6px;\n}\n.pen-has-toolbar body {\npadding-right: 54px;\n}\nhtml.pen-has-toolbar.pen-rail-left body {\npadding-right: 0;\npadding-left: 54px;\n}\n.pen-bar {\nposition: relative;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\npadding: 0.25rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-bar > button {\nposition: relative;\nmin-height: 36px;\nmin-width: 36px;\npadding: 0;\ndisplay: grid;\nplace-items: center;\nfont-size: 1rem;\nline-height: 1;\n}\n.pen-ink-dot {\nposition: absolute;\nright: 4px;\nbottom: 4px;\nwidth: 7px;\nheight: 7px;\nborder-radius: 999px;\nbackground: var(--active-ink, #1f2937);\nborder: 1px solid #fff;\npointer-events: none;\n}\n.pen-bar > .pen-nav-btn {\nfont-size: 0.72rem;\nfont-weight: 700;\nletter-spacing: -0.02em;\npadding: 0 0.25rem;\n}\n.pen-bar > .pen-nav-btn[hidden],\n.pen-bar > .pen-timer-pill[hidden] {\ndisplay: none;\n}\n.pen-bar > .pen-timer-pill {\nmin-height: 26px;\nfont-size: 0.68rem;\nfont-variant-numeric: tabular-nums;\nfont-weight: 600;\npadding: 0 0.2rem;\n}\n.pen-bar > .pen-timer-pill.pen-timer-low {\nbackground: #b91c1c;\ncolor: #fff;\nborder-color: #b91c1c;\n}\n.pen-nav-popover {\nposition: absolute;\nright: calc(100% + 8px);\ntop: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.28rem;\nwidth: min(270px, calc(100vw - 74px));\nmax-height: 66vh;\noverflow-y: auto;\npadding: 0.5rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\nhtml.pen-rail-left .pen-nav-popover,\nhtml.pen-rail-left .pen-popover {\nright: auto;\nleft: calc(100% + 8px);\n}\n.pen-nav-popover[hidden] {\ndisplay: none;\n}\n.pen-nav-head {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.4rem;\nfont-size: 0.8rem;\ntext-transform: uppercase;\nletter-spacing: 0.04em;\nopacity: 0.78;\npadding: 0.05rem 0.2rem 0.1rem;\n}\n.pen-nav-total-pts {\nfont-weight: 700;\nfont-size: 0.74rem;\ntext-transform: none;\nletter-spacing: 0;\n}\n.pen-nav-progress {\nheight: 5px;\nborder-radius: 999px;\nbackground: rgb(0 0 0 / 0.12);\noverflow: hidden;\nmargin-bottom: 0.15rem;\n}\n.pen-nav-progress-fill {\nheight: 100%;\nwidth: 0%;\nbackground: #000;\n}\n.pen-nav-list {\ndisplay: flex;\nflex-direction: column;\ngap: 0.22rem;\n}\n.pen-nav-jump {\nmargin-top: 0.2rem;\nmin-height: 34px;\npadding: 0 0.55rem;\nfont-size: 0.82rem;\nfont-weight: 600;\ntext-align: center;\n}\n.pen-nav-jump[hidden] {\ndisplay: none;\n}\n.pen-nav-item {\ndisplay: flex;\nalign-items: center;\ngap: 0.45rem;\nmin-height: 36px;\npadding: 0.2rem 0.55rem;\ntext-align: left;\nfont-size: 0.86rem;\n}\n.pen-nav-icon {\nflex: none;\nwidth: 1.1em;\ntext-align: center;\nfont-weight: 700;\n}\n.pen-nav-text {\nflex: 1;\nmin-width: 0;\noverflow: hidden;\ntext-overflow: ellipsis;\nwhite-space: nowrap;\n}\n.pen-nav-pts {\nflex: none;\nfont-size: 0.74rem;\nopacity: 0.7;\n}\n.pen-ink-controls {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.4rem;\npadding: 0.15rem 0.1rem;\n}\n.pen-swatches,\n.pen-nibs {\ndisplay: flex;\ngap: 0.28rem;\nalign-items: center;\n}\n.pen-popover .pen-swatch {\nmin-width: 28px;\nmin-height: 28px;\npadding: 0;\nborder-radius: 999px;\nbackground: var(--swatch, #1f2937);\nborder: 2px solid transparent;\nbox-shadow: inset 0 0 0 2px #fff;\n}\n.pen-popover .pen-swatch[aria-pressed=\"true\"] {\nborder-color: #000;\nbackground: var(--swatch, #1f2937);\n}\n.pen-popover .pen-nib {\nmin-width: 28px;\nmin-height: 28px;\npadding: 0;\ntext-align: center;\nfont-size: 0.78rem;\nfont-weight: 700;\n}\n.pen-paper-row {\ndisplay: flex;\ngap: 0.22rem;\n}\n.pen-paper-row[hidden] {\ndisplay: none;\n}\n.pen-popover .pen-paper-btn {\nflex: 1;\nmin-height: 30px;\npadding: 0 0.35rem;\ntext-align: center;\nfont-size: 0.78rem;\nfont-weight: 600;\n}\n.pen-rubric {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.3rem;\nmargin: 0 0 0.35rem;\n}\n.pen-rubric-item {\ndisplay: inline-flex;\nalign-items: center;\ngap: 0.25rem;\nfont-size: 0.8rem;\nline-height: 1.3;\npadding: 0.14rem 0.5rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 999px;\nbackground: rgb(0 0 0 / 0.03);\ncolor: inherit;\n}\n.pen-rubric-item::before {\ncontent: \"☐\";\nfont-size: 0.82em;\nopacity: 0.7;\n}\n.pen-rubric-item[data-met=\"true\"] {\nborder-color: #15803d;\nbackground: #f0fdf4;\ncolor: #15803d;\nfont-weight: 600;\n}\n.pen-rubric-item[data-met=\"true\"]::before {\ncontent: \"✓\";\nopacity: 1;\n}\n.pen-rubric-item[data-met=\"false\"] {\nborder-style: dashed;\nopacity: 0.72;\n}\n.pen-hint-box {\nmargin: 0.35rem 0 0.2rem;\npadding: 0.28rem 0.65rem;\nborder: 1px dashed rgb(0 0 0 / 0.35);\nborder-radius: 8px;\nbackground: rgb(0 0 0 / 0.02);\nfont-size: 0.9rem;\n}\n.pen-hint-box summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-hint-box[open] summary {\nmargin-bottom: 0.25rem;\n}\n.pen-confirm-bar {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 0.45rem 0;\npadding: 0.6rem 0.85rem;\nborder: 2px solid #b45309;\nborder-radius: 10px;\nbackground: #fffbeb;\ncolor: #000;\n}\n.pen-confirm-text {\nfont-weight: 600;\nfont-size: 0.92rem;\n}\n.pen-confirm-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\n}\n.pen-confirm-send,\n.pen-retry-missed {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\nfont-size: 0.9rem;\nfont-weight: 600;\ncursor: pointer;\n}\n.pen-prev-feedback {\nmargin: 0.4rem 0 0.9rem;\npadding: 0.35rem 0.7rem;\nborder: 1px dashed rgb(0 0 0 / 0.45);\nborder-left: 4px solid #b45309;\nborder-radius: 8px;\nbackground: rgb(0 0 0 / 0.025);\nfont-size: 0.92rem;\n}\n.pen-prev-feedback summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-timer-row {\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-timer-row .pen-timer-toggle {\nflex: 1;\n}\n.pen-timer-row .pen-timer-reset {\nflex: none;\nmin-width: 34px;\npadding: 0;\ntext-align: center;\n}\n.pen-timer-row .pen-timer-reset[hidden] {\ndisplay: none;\n}\n.pen-menu-sep {\nborder: none;\nborder-top: 1px solid rgb(0 0 0 / 0.18);\nmargin: 0.15rem 0;\n}\n.pen-popover {\nposition: absolute;\nright: calc(100% + 8px);\nbottom: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nmin-width: 190px;\npadding: 0.4rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-popover[hidden] {\ndisplay: none;\n}\n.pen-popover button {\nmin-height: 36px;\npadding: 0 0.65rem;\ntext-align: left;\nfont-size: 0.9rem;\nwhite-space: nowrap;\n}\n.pen-has-toolbar pen-input .pen-tools {\ndisplay: none;\n}\n.inkpad.pen-pad-active {\nborder-color: #000;\nbox-shadow: 0 0 0 1px #000;\n}\n.inkpad.pen-pad-flagged {\nborder-style: dashed;\nborder-width: 2px;\n}\n.inkpad.pen-pad-empty::after {\ncontent: attr(data-empty-hint);\nposition: absolute;\nleft: 12px;\ntop: 10px;\nz-index: 2;\npointer-events: none;\nfont-size: 0.85rem;\ncolor: rgb(100 116 139 / 0.65);\n}\n.inkpad:has(.pen-pad-pts).pen-pad-empty::after {\nleft: 68px;\n}\n.pen-pad-pts {\nposition: absolute;\nleft: 8px;\ntop: 8px;\nz-index: 4;\npointer-events: none;\npadding: 0.12rem 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont-size: 0.74rem;\nfont-weight: 700;\n}\n.pen-pad-top-actions {\nposition: absolute;\ntop: 6px;\nright: 6px;\nz-index: 4;\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-pad-btn {\nmin-width: 32px;\nmin-height: 32px;\npadding: 0 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.45);\nborder-radius: 8px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\nline-height: 1;\ncursor: pointer;\n}\n.pen-more-in {\nposition: absolute;\nright: 6px;\nbottom: 6px;\nz-index: 4;\nfont-weight: 700;\n}\n.pen-pin-in,\n.pen-flag-in {\nfont-size: 0.84rem;\n}\n.pen-pin-in[aria-pressed=\"true\"],\n.pen-flag-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\n.inkpad.readonly .pen-pad-btn,\n.inkpad.readonly .pen-pad-top-actions {\ndisplay: none;\n}\n.pen-pinned {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 28;\ndisplay: flex;\nalign-items: flex-start;\ngap: 0.5rem;\npadding: 0.45rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-pinned-body {\nflex: 1;\nmin-width: 0;\nmax-height: 28vh;\noverflow-y: auto;\nfont-size: 0.95rem;\nline-height: 1.4;\n}\n.pen-pinned-body > :first-child {\nmargin-top: 0;\n}\n.pen-pinned-body > :last-child {\nmargin-bottom: 0;\n}\n.pen-unpin {\nflex: none;\nmin-width: 32px;\nmin-height: 32px;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1.5rem 0 1rem;\n}\n.pen-submit-shell {\ndisplay: flex;\nflex-direction: column;\ngap: 0.55rem;\n}\n.pen-submit-primary {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.65rem;\n}\npen-submit .pen-send {\nmin-height: 44px;\npadding: 0 1.25rem;\nfont-weight: 700;\nfont-size: 1rem;\n}\n.pen-readiness {\nfont-size: 0.88rem;\npadding: 0.22rem 0.6rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 999px;\n}\n.pen-readiness[hidden] {\ndisplay: none;\n}\n.pen-readiness-all {\nfont-weight: 600;\nborder-color: #15803d;\ncolor: #15803d;\n}\n.pen-submit-utils {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nalign-items: center;\n}\n.pen-boox-btn {\nfont-size: 0.84rem;\nmin-height: 32px;\npadding: 0 0.6rem;\nborder-color: rgb(0 0 0 / 0.35);\n}\n.pen-boox-file[hidden] {\ndisplay: none;\n}\n.pen-review-bar {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 0.4rem 0 0.65rem;\npadding: 0.5rem 0.75rem;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-radius: 10px;\nbackground: rgb(0 0 0 / 0.025);\n}\n.pen-review-pills,\n.pen-review-filters {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nalign-items: center;\n}\n.pen-review-pill {\nfont-size: 0.84rem;\nfont-weight: 700;\npadding: 0.16rem 0.55rem;\nborder-radius: 999px;\nborder: 1px solid currentColor;\n}\n.pen-score-pill {\nfont-size: 0.88rem;\nfont-weight: 800;\npadding: 0.18rem 0.65rem;\nborder-radius: 999px;\nbackground: #000;\ncolor: #fff;\nborder: 1px solid #000;\n}\n.pen-time-pill {\nfont-size: 0.82rem;\nfont-weight: 600;\nfont-variant-numeric: tabular-nums;\npadding: 0.16rem 0.5rem;\nborder-radius: 999px;\nborder: 1px solid rgb(0 0 0 / 0.35);\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback-head {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.4rem;\nmargin-bottom: 0.25rem;\n}\n.pen-feedback-head .pen-badge,\n.pen-feedback-head .pen-verdict {\nmargin-bottom: 0;\n}\n.pen-pts-earned {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.12rem 0.48rem;\nborder-radius: 999px;\nborder: 1px solid rgb(0 0 0 / 0.28);\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-flag-tag {\nfont-size: 0.78rem;\nfont-weight: 700;\npadding: 0.1rem 0.42rem;\nborder-radius: 999px;\nborder: 1px solid currentColor;\nopacity: 0.8;\n}\n.pen-review-pill[data-verdict=\"correct\"] {\ncolor: #15803d;\nbackground: #f0fdf4;\n}\n.pen-review-pill[data-verdict=\"partial\"] {\ncolor: #b45309;\nbackground: #fffbeb;\n}\n.pen-review-pill[data-verdict=\"incorrect\"] {\ncolor: #b91c1c;\nbackground: #fef2f2;\n}\n.pen-review-pill[data-verdict=\"blank\"] {\ncolor: #475569;\nbackground: #f8fafc;\n}\n.pen-filter-btn {\nmin-height: 30px;\npadding: 0 0.6rem;\nfont-size: 0.82rem;\n}\n.pen-filter-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml[data-review-filter=\"needs-work\"] .pen-feedback[data-verdict=\"correct\"],\nhtml[data-review-filter=\"flagged\"] .pen-feedback:not([data-flagged=\"true\"]) {\nopacity: 0.36;\n}\n.pen-feedback {\nmargin: 0.55rem 0 1.15rem;\npadding: 0.75rem 1rem;\nborder: 1px solid rgb(0 0 0 / 0.22);\nborder-left: 4px solid #1e3a8a;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\nline-height: 1.58;\n}\n.pen-feedback[data-verdict=\"correct\"] {\nborder-left-color: #15803d;\n}\n.pen-feedback[data-verdict=\"partial\"] {\nborder-left-color: #b45309;\n}\n.pen-feedback[data-verdict=\"incorrect\"] {\nborder-left-color: #b91c1c;\n}\n.pen-feedback[data-verdict=\"blank\"] {\nborder-left-color: #475569;\n}\n.pen-feedback p {\nmargin: 0.35rem 0;\n}\n.pen-badge {\ndisplay: inline-block;\npadding: 0.16rem 0.6rem;\nmargin-bottom: 0.3rem;\nborder: 1px solid #1e3a8a;\nborder-radius: 999px;\nbackground: #eff6ff;\ncolor: #1e3a8a;\nfont-size: 0.85rem;\nfont-weight: 700;\n}\n.pen-badge[data-verdict=\"correct\"],\n.pen-verdict[data-verdict=\"correct\"] {\ncolor: #15803d;\nborder-color: #15803d;\nbackground: #f0fdf4;\n}\n.pen-badge[data-verdict=\"partial\"],\n.pen-verdict[data-verdict=\"partial\"] {\ncolor: #b45309;\nborder-color: #b45309;\nbackground: #fffbeb;\n}\n.pen-badge[data-verdict=\"incorrect\"],\n.pen-verdict[data-verdict=\"incorrect\"] {\ncolor: #b91c1c;\nborder-color: #b91c1c;\nbackground: #fef2f2;\n}\n.pen-badge[data-verdict=\"blank\"],\n.pen-verdict[data-verdict=\"blank\"] {\ncolor: #475569;\nborder-color: #475569;\nbackground: #f8fafc;\n}\n.pen-verdict {\ndisplay: inline-block;\npadding: 0.12rem 0.52rem;\nmargin-bottom: 0.25rem;\nborder: 1px solid currentColor;\nborder-radius: 999px;\nfont-size: 0.85rem;\n}\n.pen-read-line {\nfont-size: 0.9rem;\npadding: 0.28rem 0 0.35rem;\nmargin: 0.15rem 0 0.45rem;\nborder-bottom: 1px solid rgb(0 0 0 / 0.1);\ncolor: rgb(0 0 0 / 0.78);\n}\n.pen-md > :first-child {\nmargin-top: 0.2rem;\n}\n.pen-md > :last-child {\nmargin-bottom: 0.2rem;\n}\n.pen-md-h {\nmargin: 0.7rem 0 0.25rem;\nfont-size: 1rem;\nfont-weight: 700;\n}\n.pen-md ul,\n.pen-md ol {\nmargin: 0.35rem 0 0.45rem;\npadding-left: 1.35rem;\n}\n.pen-md li {\nmargin: 0.18rem 0;\n}\n.pen-md blockquote {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.7rem;\nborder-left: 3px solid #000;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-md code {\npadding: 0.08rem 0.3rem;\nborder-radius: 4px;\nbackground: rgb(0 0 0 / 0.07);\nfont-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\nfont-size: 0.9em;\n}\n.pen-code {\nmargin: 0.45rem 0;\npadding: 0.55rem 0.75rem;\noverflow-x: auto;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-radius: 6px;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-code code {\npadding: 0;\nbackground: none;\n}\n.pen-table-wrap {\nmargin: 0.45rem 0;\noverflow-x: auto;\n}\n.pen-md table {\nborder-collapse: collapse;\nwidth: 100%;\nfont-size: 0.92rem;\n}\n.pen-md th,\n.pen-md td {\npadding: 0.32rem 0.55rem;\nborder: 1px solid #000;\ntext-align: left;\n}\n.pen-md th {\nfont-weight: 700;\nbackground: rgb(0 0 0 / 0.05);\n}\n.pen-disclosure {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.65rem;\nborder: 1px dashed #000;\nborder-radius: 6px;\n}\n.pen-disclosure summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-disclosure[open] summary {\nmargin-bottom: 0.3rem;\n}\n.pen-next-time {\nfont-weight: 600;\n}\n.pen-summary-card {\nmargin: 0.65rem 0;\npadding: 0.7rem 0.9rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nmargin: 0.55rem 0;\n}\n.pen-followup {\nmargin-top: 0.75rem;\npadding: 0.7rem 0.85rem;\nborder: 1px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-followup-thread {\ndisplay: flex;\nflex-direction: column;\ngap: 0.5rem;\n}\n.pen-followup-thread:not(:empty) {\nmargin-bottom: 0.6rem;\n}\n.pen-followup-msg {\npadding: 0.45rem 0.65rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 8px;\n}\n.pen-followup-student {\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-followup-who {\ndisplay: block;\nfont-size: 0.78rem;\nfont-weight: 700;\ntext-transform: uppercase;\nletter-spacing: 0.03em;\nopacity: 0.75;\nmargin-bottom: 0.15rem;\n}\n.pen-followup-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\n}\n.pen-followup-input {\nflex: 1 1 14rem;\nmin-width: 0;\nmin-height: 40px;\npadding: 0 0.65rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-followup-status {\nmargin: 0.35rem 0 0;\nfont-size: 0.88rem;\n}\n.pen-grader-backdrop {\nposition: fixed;\ninset: 0;\nz-index: 60;\ndisplay: grid;\nplace-items: center;\npadding: 1rem;\nbackground: rgb(0 0 0 / 0.5);\n}\n.pen-grader-card {\nwidth: min(440px, 100%);\npadding: 1rem 1.1rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.65rem;\n}\n.pen-grader-head {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\n}\n.pen-grader-note {\nmargin: 0;\nfont-size: 0.88rem;\nline-height: 1.4;\n}\n.pen-grader-label {\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-grader-label[hidden] {\ndisplay: none;\n}\n.pen-grader-field {\nmin-height: 38px;\npadding: 0.35rem 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-weight: 400;\n}\n.pen-grader-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nmargin-top: 0.2rem;\n}\n.pen-grader-actions .pen-send {\nmin-height: 38px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\ncursor: pointer;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #ffffff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.35) calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px));\n}\n.hwq-eink .pen-feedback,\n.hwq-eink .pen-badge,\n.hwq-eink .pen-verdict,\n.hwq-eink .pen-review-bar,\n.hwq-eink .pen-review-pill,\n.hwq-eink .pen-time-pill,\n.hwq-eink .pen-readiness,\n.hwq-eink .pen-pad-btn,\n.hwq-eink .pen-pad-pts,\n.hwq-eink .pen-pts-earned,\n.hwq-eink .pen-rubric-item,\n.hwq-eink .pen-hint-box,\n.hwq-eink .pen-confirm-bar,\n.hwq-eink .pen-prev-feedback,\n.hwq-eink .pen-boox-btn {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-score-pill,\n.hwq-eink .pen-confirm-send,\n.hwq-eink .pen-retry-missed {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\n.hwq-eink .pen-rubric-item[data-met=\"true\"] {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\nborder-width: 2px;\n}\n.hwq-eink .pen-nav-progress {\nbackground: #fff;\nborder: 1px solid #000;\n}\n.hwq-eink .pen-read-line {\ncolor: #000;\nborder-bottom-color: #000;\n}\n.hwq-eink .pen-feedback[data-verdict=\"partial\"],\n.hwq-eink .pen-feedback[data-verdict=\"incorrect\"] {\nborder-left-width: 6px;\n}\n.hwq-eink .pen-bar > .pen-timer-pill.pen-timer-low,\n.hwq-eink .pen-filter-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\nhtml.pen-dark body {\nbackground: #111317 !important;\ncolor: #e6e8ec !important;\n}\nhtml.pen-dark .pen-bar,\nhtml.pen-dark .pen-popover,\nhtml.pen-dark .pen-nav-popover,\nhtml.pen-dark .pen-pinned,\nhtml.pen-dark .pen-feedback,\nhtml.pen-dark .pen-summary-card,\nhtml.pen-dark .pen-followup,\nhtml.pen-dark .pen-grader-card,\nhtml.pen-dark .pen-review-bar,\nhtml.pen-dark .pen-confirm-bar,\nhtml.pen-dark .pen-prev-feedback,\nhtml.pen-dark .pen-hint-box,\nhtml.pen-dark .pen-sheet-card,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar,\nhtml[data-darkreader-scheme=\"dark\"] .pen-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-nav-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pinned {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-followup-input,\nhtml.pen-dark .pen-grader-field,\nhtml.pen-dark .pen-disclosure,\nhtml.pen-dark .pen-badge,\nhtml.pen-dark .pen-verdict,\nhtml.pen-dark .pen-review-pill,\nhtml.pen-dark .pen-time-pill,\nhtml.pen-dark .pen-pts-earned,\nhtml.pen-dark .pen-rubric-item,\nhtml.pen-dark .pen-readiness,\nhtml.pen-dark .pen-pad-pts {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-score-pill,\nhtml.pen-dark .pen-confirm-send,\nhtml.pen-dark .pen-retry-missed,\nhtml.pen-dark .pen-nav-progress-fill {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-nav-progress {\nbackground: rgb(255 255 255 / 0.14) !important;\n}\nhtml.pen-dark .pen-read-line {\ncolor: #b8c0cc !important;\nborder-bottom-color: #363c48 !important;\n}\nhtml.pen-dark .pen-md code,\nhtml.pen-dark .pen-code,\nhtml.pen-dark .pen-md blockquote,\nhtml.pen-dark .pen-md th,\nhtml.pen-dark .pen-followup-student {\nbackground: rgb(255 255 255 / 0.06) !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-pad-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pad-btn {\nbackground: rgb(28 31 38 / 0.9) !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button,\nhtml.pen-dark .pen-unpin,\nhtml.pen-dark .pen-sheet-btn,\nhtml.pen-dark .pen-boox-btn,\nhtml.pen-dark .pen-filter-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button,\nhtml[data-darkreader-scheme=\"dark\"] .pen-unpin,\nhtml[data-darkreader-scheme=\"dark\"] .pen-boox-btn {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button[aria-pressed=\"true\"],\nhtml.pen-dark .pen-pin-in[aria-pressed=\"true\"],\nhtml.pen-dark .pen-flag-in[aria-pressed=\"true\"],\nhtml.pen-dark .pen-filter-btn[aria-pressed=\"true\"],\nhtml.pen-dark pen-submit .pen-send,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-pin-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-flag-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] pen-submit .pen-send {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-popover .pen-swatch {\nbackground: var(--swatch, #1f2937) !important;\nbox-shadow: inset 0 0 0 2px #1c1f26 !important;\n}\nhtml.pen-dark .pen-popover .pen-swatch[aria-pressed=\"true\"] {\nborder-color: #e6e8ec !important;\n}\npen-header {\ndisplay: block;\nmargin: 0.75rem 0 1.25rem;\n}\n.pen-header-card {\npadding: 0.85rem 1rem;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-bottom: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-header-top {\ndisplay: flex;\nalign-items: flex-start;\njustify-content: space-between;\ngap: 0.75rem;\n}\n.pen-header-titles {\nflex: 1;\nmin-width: 0;\n}\n.pen-header-title {\nmargin: 0;\nfont-size: 1.38rem;\nline-height: 1.25;\n}\n.pen-header-sub {\nmargin: 0.28rem 0 0;\nfont-size: 0.93rem;\nopacity: 0.8;\n}\n.pen-header-bottom {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem 1rem;\nmargin-top: 0.65rem;\n}\n.pen-header-meta {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\n}\n.pen-meta-chip {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.14rem 0.52rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\n}\n.pen-student-wrap {\ndisplay: inline-flex;\nalign-items: center;\ngap: 0.4rem;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-student-input {\nmin-height: 32px;\nwidth: 13rem;\nmax-width: 55vw;\npadding: 0.15rem 0.5rem;\nborder: none;\nborder-bottom: 1.5px solid #000;\nbackground: transparent;\ncolor: inherit;\nfont: inherit;\nfont-weight: 400;\n}\n.pen-focus-hidden {\ndisplay: none !important;\n}\n.pen-focus-bar {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 1rem 0 1.25rem;\npadding: 0.55rem 0.75rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-focus-pos {\nfont-size: 0.9rem;\nfont-weight: 700;\n}\n.pen-confidence {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.35rem;\nmargin: 0.38rem 0 0.15rem;\n}\n.pen-confidence-label {\nfont-size: 0.82rem;\nopacity: 0.75;\nmargin-right: 0.15rem;\n}\n.pen-conf-btn {\nmin-height: 30px;\npadding: 0 0.6rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.82rem;\ncursor: pointer;\n}\n.pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\nfont-weight: 600;\n}\n.pen-conf-btn:disabled {\nopacity: 0.5;\ncursor: default;\n}\n.pen-conf-tag {\nfont-size: 0.78rem;\nfont-weight: 600;\npadding: 0.1rem 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 999px;\n}\n.pen-conf-warn,\n.pen-conf-warn-pill {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.14rem 0.52rem;\nborder: 1px solid #b45309;\nborder-radius: 999px;\nbackground: #fffbeb;\ncolor: #b45309;\n}\n.pen-progress-pill {\nfont-size: 0.82rem;\nfont-weight: 700;\npadding: 0.16rem 0.55rem;\nborder: 1px solid #15803d;\nborder-radius: 999px;\nbackground: #f0fdf4;\ncolor: #15803d;\n}\n.hwq-eink .pen-header-card,\n.hwq-eink .pen-meta-chip,\n.hwq-eink .pen-focus-bar,\n.hwq-eink .pen-conf-btn,\n.hwq-eink .pen-conf-tag,\n.hwq-eink .pen-conf-warn,\n.hwq-eink .pen-conf-warn-pill,\n.hwq-eink .pen-progress-pill {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml.pen-dark .pen-header-card,\nhtml.pen-dark .pen-focus-bar {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-meta-chip,\nhtml.pen-dark .pen-conf-btn,\nhtml.pen-dark .pen-conf-tag,\nhtml.pen-dark .pen-conf-warn,\nhtml.pen-dark .pen-conf-warn-pill,\nhtml.pen-dark .pen-progress-pill {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-student-input {\nborder-bottom-color: #6b7280 !important;\n}\nhtml.pen-dark .pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n.pen-sheet-card {\nmargin-top: 0.75rem;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-sheet-head {\ndisplay: flex;\nalign-items: baseline;\njustify-content: space-between;\ngap: 0.5rem;\nfont-size: 1.05rem;\n}\n.pen-sheet-count {\nfont-size: 0.85rem;\npadding: 0.15rem 0.5rem;\nborder: 1px solid #000;\nborder-radius: 999px;\n}\n.pen-sheet-msg {\nmargin: 0.4rem 0 0.65rem;\nfont-size: 0.92rem;\n}\n.pen-sheet-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nmargin-bottom: 0.6rem;\n}\n.pen-sheet-btn {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.75rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\ntext-decoration: none;\ncursor: pointer;\n}\n.pen-sheet-btn[hidden] {\ndisplay: none;\n}\n.pen-sheet-skipped {\nmargin: 0.25rem 0 0.6rem;\nfont-size: 0.88rem;\n}\n.pen-sheet-item {\nmargin: 0.7rem 0;\npadding-top: 0.5rem;\nborder-top: 1px solid #000;\n}\n.pen-sheet-item-head {\nfont-weight: 700;\nfont-size: 0.95rem;\nmargin-bottom: 0.3rem;\n}\n.pen-sheet-typed {\nmargin: 0.25rem 0 0.4rem;\nwhite-space: pre-wrap;\n}\n.pen-sheet-fig {\nmargin: 0.35rem 0 0;\n}\n.pen-sheet-fig img {\ndisplay: block;\nmax-width: 100%;\nborder: 1px solid #000;\nborder-radius: 6px;\n}\n.pen-sheet-details {\nmargin-top: 0.65rem;\n}\n.pen-sheet-details summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 32px;\n}\n@media print {\npen-toolbar,\n.pen-tools,\n.pen-pad-btn,\n.pen-pad-top-actions,\n.pen-pinned,\n.pen-hint-box,\n.pen-confirm-bar,\n.pen-prev-feedback,\n.pen-sheet-actions,\n.pen-save,\n.pen-boox-btn,\n.pen-readiness,\n.pen-submit-utils,\n.pen-review-filters,\n.pen-followup-form,\n.pen-feedback-actions,\n.pen-grader-backdrop,\n.pen-focus-bar,\n.pen-focus-btn,\n.pen-confidence,\npen-submit .pen-send {\ndisplay: none !important;\n}\n.pen-focus-hidden {\ndisplay: block !important;\n}\n.inkpad.pen-pad-empty::after {\ncontent: none !important;\n}\n.inkpad,\n.pen-feedback,\n.pen-summary-card,\n.pen-review-bar {\nbreak-inside: avoid;\npage-break-inside: avoid;\n}\n.pen-has-toolbar body,\nhtml.pen-has-toolbar.pen-rail-left body {\npadding-right: 0 !important;\npadding-left: 0 !important;\n}\n}";
+const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #ffffff;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\nposition: relative;\nz-index: 1;\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.inkpad .predict {\nz-index: 2;\n}\n.inkpad .marks {\nz-index: 3;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\nz-index: 0;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.28) calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad,\nhtml.pen-dark .inkpad {\nbackground-color: #17191e !important;\nborder-color: #323742 !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-ruled,\nhtml.pen-dark .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.12) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-grid,\nhtml.pen-dark .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad canvas,\nhtml[data-darkreader-scheme=\"dark\"] .inkpad .figure-bg,\nhtml.pen-dark .inkpad canvas,\nhtml.pen-dark .inkpad .figure-bg {\nfilter: invert(0.92) hue-rotate(180deg);\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks path,\nhtml.pen-dark .marks path {\nstroke: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks text,\nhtml.pen-dark .marks text {\nfill: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks .mark-note,\nhtml.pen-dark .marks .mark-note {\ncolor: #fca5a5;\ntext-shadow: 0 0 4px #17191e, 0 0 4px #17191e, 0 0 4px #17191e;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\n.pen-sr {\nposition: absolute;\nwidth: 1px;\nheight: 1px;\noverflow: hidden;\nclip-path: inset(50%);\nwhite-space: nowrap;\n}\npen-toolbar {\nposition: fixed;\nright: 6px;\ntop: 50%;\ntransform: translateY(-50%);\nz-index: 30;\n}\nhtml.pen-rail-left pen-toolbar {\nright: auto;\nleft: 6px;\n}\n.pen-has-toolbar body {\npadding-right: 54px;\n}\nhtml.pen-has-toolbar.pen-rail-left body {\npadding-right: 0;\npadding-left: 54px;\n}\n.pen-bar {\nposition: relative;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\npadding: 0.25rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-bar > button {\nposition: relative;\nmin-height: 36px;\nmin-width: 36px;\npadding: 0;\ndisplay: grid;\nplace-items: center;\nfont-size: 1rem;\nline-height: 1;\n}\n.pen-ink-dot {\nposition: absolute;\nright: 4px;\nbottom: 4px;\nwidth: 7px;\nheight: 7px;\nborder-radius: 999px;\nbackground: var(--active-ink, #1f2937);\nborder: 1px solid #fff;\npointer-events: none;\n}\n.pen-bar > .pen-nav-btn {\nfont-size: 0.72rem;\nfont-weight: 700;\nletter-spacing: -0.02em;\npadding: 0 0.25rem;\n}\n.pen-bar > .pen-nav-btn[hidden],\n.pen-bar > .pen-timer-pill[hidden] {\ndisplay: none;\n}\n.pen-bar > .pen-timer-pill {\nmin-height: 26px;\nfont-size: 0.68rem;\nfont-variant-numeric: tabular-nums;\nfont-weight: 600;\npadding: 0 0.2rem;\n}\n.pen-bar > .pen-timer-pill.pen-timer-low {\nbackground: #b91c1c;\ncolor: #fff;\nborder-color: #b91c1c;\n}\n.pen-nav-popover {\nposition: absolute;\nright: calc(100% + 8px);\ntop: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.28rem;\nwidth: min(270px, calc(100vw - 74px));\nmax-height: 66vh;\noverflow-y: auto;\npadding: 0.5rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\nhtml.pen-rail-left .pen-nav-popover,\nhtml.pen-rail-left .pen-popover {\nright: auto;\nleft: calc(100% + 8px);\n}\n.pen-nav-popover[hidden] {\ndisplay: none;\n}\n.pen-nav-head {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.4rem;\nfont-size: 0.8rem;\ntext-transform: uppercase;\nletter-spacing: 0.04em;\nopacity: 0.78;\npadding: 0.05rem 0.2rem 0.1rem;\n}\n.pen-nav-total-pts {\nfont-weight: 700;\nfont-size: 0.74rem;\ntext-transform: none;\nletter-spacing: 0;\n}\n.pen-nav-progress {\nheight: 5px;\nborder-radius: 999px;\nbackground: rgb(0 0 0 / 0.12);\noverflow: hidden;\nmargin-bottom: 0.15rem;\n}\n.pen-nav-progress-fill {\nheight: 100%;\nwidth: 0%;\nbackground: #000;\n}\n.pen-nav-list {\ndisplay: flex;\nflex-direction: column;\ngap: 0.22rem;\n}\n.pen-nav-jump {\nmargin-top: 0.2rem;\nmin-height: 34px;\npadding: 0 0.55rem;\nfont-size: 0.82rem;\nfont-weight: 600;\ntext-align: center;\n}\n.pen-nav-jump[hidden] {\ndisplay: none;\n}\n.pen-nav-item {\ndisplay: flex;\nalign-items: center;\ngap: 0.45rem;\nmin-height: 36px;\npadding: 0.2rem 0.55rem;\ntext-align: left;\nfont-size: 0.86rem;\n}\n.pen-nav-icon {\nflex: none;\nwidth: 1.1em;\ntext-align: center;\nfont-weight: 700;\n}\n.pen-nav-text {\nflex: 1;\nmin-width: 0;\noverflow: hidden;\ntext-overflow: ellipsis;\nwhite-space: nowrap;\n}\n.pen-nav-pts {\nflex: none;\nfont-size: 0.74rem;\nopacity: 0.7;\n}\n.pen-ink-controls {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.4rem;\npadding: 0.15rem 0.1rem;\n}\n.pen-swatches,\n.pen-nibs {\ndisplay: flex;\ngap: 0.28rem;\nalign-items: center;\n}\n.pen-popover .pen-swatch {\nmin-width: 28px;\nmin-height: 28px;\npadding: 0;\nborder-radius: 999px;\nbackground: var(--swatch, #1f2937);\nborder: 2px solid transparent;\nbox-shadow: inset 0 0 0 2px #fff;\n}\n.pen-popover .pen-swatch[aria-pressed=\"true\"] {\nborder-color: #000;\nbackground: var(--swatch, #1f2937);\n}\n.pen-popover .pen-nib {\nmin-width: 28px;\nmin-height: 28px;\npadding: 0;\ntext-align: center;\nfont-size: 0.78rem;\nfont-weight: 700;\n}\n.pen-paper-row {\ndisplay: flex;\ngap: 0.22rem;\n}\n.pen-paper-row[hidden] {\ndisplay: none;\n}\n.pen-popover .pen-paper-btn {\nflex: 1;\nmin-height: 30px;\npadding: 0 0.35rem;\ntext-align: center;\nfont-size: 0.78rem;\nfont-weight: 600;\n}\n.pen-rubric {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.3rem;\nmargin: 0 0 0.35rem;\n}\n.pen-rubric-item {\ndisplay: inline-flex;\nalign-items: center;\ngap: 0.25rem;\nfont-size: 0.8rem;\nline-height: 1.3;\npadding: 0.14rem 0.5rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 999px;\nbackground: rgb(0 0 0 / 0.03);\ncolor: inherit;\n}\n.pen-rubric-item::before {\ncontent: \"☐\";\nfont-size: 0.82em;\nopacity: 0.7;\n}\n.pen-rubric-item[data-met=\"true\"] {\nborder-color: #15803d;\nbackground: #f0fdf4;\ncolor: #15803d;\nfont-weight: 600;\n}\n.pen-rubric-item[data-met=\"true\"]::before {\ncontent: \"✓\";\nopacity: 1;\n}\n.pen-rubric-item[data-met=\"false\"] {\nborder-style: dashed;\nopacity: 0.72;\n}\n.pen-hint-box {\nmargin: 0.35rem 0 0.2rem;\npadding: 0.28rem 0.65rem;\nborder: 1px dashed rgb(0 0 0 / 0.35);\nborder-radius: 8px;\nbackground: rgb(0 0 0 / 0.02);\nfont-size: 0.9rem;\n}\n.pen-hint-box summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-hint-box[open] summary {\nmargin-bottom: 0.25rem;\n}\n.pen-confirm-bar {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 0.45rem 0;\npadding: 0.6rem 0.85rem;\nborder: 2px solid #b45309;\nborder-radius: 10px;\nbackground: #fffbeb;\ncolor: #000;\n}\n.pen-confirm-text {\nfont-weight: 600;\nfont-size: 0.92rem;\n}\n.pen-confirm-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\n}\n.pen-confirm-send,\n.pen-retry-missed {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\nfont-size: 0.9rem;\nfont-weight: 600;\ncursor: pointer;\n}\n.pen-prev-feedback {\nmargin: 0.4rem 0 0.9rem;\npadding: 0.35rem 0.7rem;\nborder: 1px dashed rgb(0 0 0 / 0.45);\nborder-left: 4px solid #b45309;\nborder-radius: 8px;\nbackground: rgb(0 0 0 / 0.025);\nfont-size: 0.92rem;\n}\n.pen-prev-feedback summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-timer-row {\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-timer-row .pen-timer-toggle {\nflex: 1;\n}\n.pen-timer-row .pen-timer-reset {\nflex: none;\nmin-width: 34px;\npadding: 0;\ntext-align: center;\n}\n.pen-timer-row .pen-timer-reset[hidden] {\ndisplay: none;\n}\n.pen-menu-sep {\nborder: none;\nborder-top: 1px solid rgb(0 0 0 / 0.18);\nmargin: 0.15rem 0;\n}\n.pen-popover {\nposition: absolute;\nright: calc(100% + 8px);\nbottom: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nmin-width: 190px;\npadding: 0.4rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-popover[hidden] {\ndisplay: none;\n}\n.pen-popover button {\nmin-height: 36px;\npadding: 0 0.65rem;\ntext-align: left;\nfont-size: 0.9rem;\nwhite-space: nowrap;\n}\n.pen-has-toolbar pen-input .pen-tools {\ndisplay: none;\n}\n.inkpad.pen-pad-active {\nborder-color: #000;\nbox-shadow: 0 0 0 1px #000;\n}\n.inkpad.pen-pad-flagged {\nborder-style: dashed;\nborder-width: 2px;\n}\n.inkpad.pen-pad-empty::after {\ncontent: attr(data-empty-hint);\nposition: absolute;\nleft: 12px;\ntop: 10px;\nz-index: 2;\npointer-events: none;\nfont-size: 0.85rem;\ncolor: rgb(100 116 139 / 0.65);\n}\n.inkpad:has(.pen-pad-pts).pen-pad-empty::after {\nleft: 68px;\n}\n.pen-pad-pts {\nposition: absolute;\nleft: 8px;\ntop: 8px;\nz-index: 4;\npointer-events: none;\npadding: 0.12rem 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont-size: 0.74rem;\nfont-weight: 700;\n}\n.pen-pad-top-actions {\nposition: absolute;\ntop: 6px;\nright: 6px;\nz-index: 4;\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-pad-btn {\nmin-width: 32px;\nmin-height: 32px;\npadding: 0 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.45);\nborder-radius: 8px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\nline-height: 1;\ncursor: pointer;\n}\n.pen-more-in {\nposition: absolute;\nright: 6px;\nbottom: 6px;\nz-index: 4;\nfont-weight: 700;\n}\n.pen-pin-in,\n.pen-flag-in {\nfont-size: 0.84rem;\n}\n.pen-pin-in[aria-pressed=\"true\"],\n.pen-flag-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\n.inkpad.readonly .pen-pad-btn,\n.inkpad.readonly .pen-pad-top-actions {\ndisplay: none;\n}\n.pen-pinned {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 28;\ndisplay: flex;\nalign-items: flex-start;\ngap: 0.5rem;\npadding: 0.45rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-pinned-body {\nflex: 1;\nmin-width: 0;\nmax-height: 28vh;\noverflow-y: auto;\nfont-size: 0.95rem;\nline-height: 1.4;\n}\n.pen-pinned-body > :first-child {\nmargin-top: 0;\n}\n.pen-pinned-body > :last-child {\nmargin-bottom: 0;\n}\n.pen-unpin {\nflex: none;\nmin-width: 32px;\nmin-height: 32px;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1.5rem 0 1rem;\n}\n.pen-submit-shell {\ndisplay: flex;\nflex-direction: column;\ngap: 0.55rem;\n}\n.pen-submit-primary {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.65rem;\n}\npen-submit .pen-send {\nmin-height: 44px;\npadding: 0 1.25rem;\nfont-weight: 700;\nfont-size: 1rem;\n}\n.pen-readiness {\nfont-size: 0.88rem;\npadding: 0.22rem 0.6rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 999px;\n}\n.pen-readiness[hidden] {\ndisplay: none;\n}\n.pen-readiness-all {\nfont-weight: 600;\nborder-color: #15803d;\ncolor: #15803d;\n}\n.pen-submit-utils {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nalign-items: center;\n}\n.pen-boox-btn {\nfont-size: 0.84rem;\nmin-height: 32px;\npadding: 0 0.6rem;\nborder-color: rgb(0 0 0 / 0.35);\n}\n.pen-boox-file[hidden] {\ndisplay: none;\n}\n.pen-review-bar {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 0.4rem 0 0.65rem;\npadding: 0.5rem 0.75rem;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-radius: 10px;\nbackground: rgb(0 0 0 / 0.025);\n}\n.pen-review-pills,\n.pen-review-filters {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nalign-items: center;\n}\n.pen-review-pill {\nfont-size: 0.84rem;\nfont-weight: 700;\npadding: 0.16rem 0.55rem;\nborder-radius: 999px;\nborder: 1px solid currentColor;\n}\n.pen-score-pill {\nfont-size: 0.88rem;\nfont-weight: 800;\npadding: 0.18rem 0.65rem;\nborder-radius: 999px;\nbackground: #000;\ncolor: #fff;\nborder: 1px solid #000;\n}\n.pen-time-pill {\nfont-size: 0.82rem;\nfont-weight: 600;\nfont-variant-numeric: tabular-nums;\npadding: 0.16rem 0.5rem;\nborder-radius: 999px;\nborder: 1px solid rgb(0 0 0 / 0.35);\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback-head {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.4rem;\nmargin-bottom: 0.25rem;\n}\n.pen-feedback-head .pen-badge,\n.pen-feedback-head .pen-verdict {\nmargin-bottom: 0;\n}\n.pen-pts-earned {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.12rem 0.48rem;\nborder-radius: 999px;\nborder: 1px solid rgb(0 0 0 / 0.28);\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-flag-tag {\nfont-size: 0.78rem;\nfont-weight: 700;\npadding: 0.1rem 0.42rem;\nborder-radius: 999px;\nborder: 1px solid currentColor;\nopacity: 0.8;\n}\n.pen-review-pill[data-verdict=\"correct\"] {\ncolor: #15803d;\nbackground: #f0fdf4;\n}\n.pen-review-pill[data-verdict=\"partial\"] {\ncolor: #b45309;\nbackground: #fffbeb;\n}\n.pen-review-pill[data-verdict=\"incorrect\"] {\ncolor: #b91c1c;\nbackground: #fef2f2;\n}\n.pen-review-pill[data-verdict=\"blank\"] {\ncolor: #475569;\nbackground: #f8fafc;\n}\n.pen-filter-btn {\nmin-height: 30px;\npadding: 0 0.6rem;\nfont-size: 0.82rem;\n}\n.pen-filter-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml[data-review-filter=\"needs-work\"] .pen-feedback[data-verdict=\"correct\"],\nhtml[data-review-filter=\"flagged\"] .pen-feedback:not([data-flagged=\"true\"]) {\nopacity: 0.36;\n}\n.pen-feedback {\nmargin: 0.55rem 0 1.15rem;\npadding: 0.75rem 1rem;\nborder: 1px solid rgb(0 0 0 / 0.22);\nborder-left: 4px solid #1e3a8a;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\nline-height: 1.58;\n}\n.pen-feedback[data-verdict=\"correct\"] {\nborder-left-color: #15803d;\n}\n.pen-feedback[data-verdict=\"partial\"] {\nborder-left-color: #b45309;\n}\n.pen-feedback[data-verdict=\"incorrect\"] {\nborder-left-color: #b91c1c;\n}\n.pen-feedback[data-verdict=\"blank\"] {\nborder-left-color: #475569;\n}\n.pen-feedback p {\nmargin: 0.35rem 0;\n}\n.pen-badge {\ndisplay: inline-block;\npadding: 0.16rem 0.6rem;\nmargin-bottom: 0.3rem;\nborder: 1px solid #1e3a8a;\nborder-radius: 999px;\nbackground: #eff6ff;\ncolor: #1e3a8a;\nfont-size: 0.85rem;\nfont-weight: 700;\n}\n.pen-badge[data-verdict=\"correct\"],\n.pen-verdict[data-verdict=\"correct\"] {\ncolor: #15803d;\nborder-color: #15803d;\nbackground: #f0fdf4;\n}\n.pen-badge[data-verdict=\"partial\"],\n.pen-verdict[data-verdict=\"partial\"] {\ncolor: #b45309;\nborder-color: #b45309;\nbackground: #fffbeb;\n}\n.pen-badge[data-verdict=\"incorrect\"],\n.pen-verdict[data-verdict=\"incorrect\"] {\ncolor: #b91c1c;\nborder-color: #b91c1c;\nbackground: #fef2f2;\n}\n.pen-badge[data-verdict=\"blank\"],\n.pen-verdict[data-verdict=\"blank\"] {\ncolor: #475569;\nborder-color: #475569;\nbackground: #f8fafc;\n}\n.pen-verdict {\ndisplay: inline-block;\npadding: 0.12rem 0.52rem;\nmargin-bottom: 0.25rem;\nborder: 1px solid currentColor;\nborder-radius: 999px;\nfont-size: 0.85rem;\n}\n.pen-read-line {\nfont-size: 0.9rem;\npadding: 0.28rem 0 0.35rem;\nmargin: 0.15rem 0 0.45rem;\nborder-bottom: 1px solid rgb(0 0 0 / 0.1);\ncolor: rgb(0 0 0 / 0.78);\n}\n.pen-md > :first-child {\nmargin-top: 0.2rem;\n}\n.pen-md > :last-child {\nmargin-bottom: 0.2rem;\n}\n.pen-md-h {\nmargin: 0.7rem 0 0.25rem;\nfont-size: 1rem;\nfont-weight: 700;\n}\n.pen-md ul,\n.pen-md ol {\nmargin: 0.35rem 0 0.45rem;\npadding-left: 1.35rem;\n}\n.pen-md li {\nmargin: 0.18rem 0;\n}\n.pen-md blockquote {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.7rem;\nborder-left: 3px solid #000;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-md code {\npadding: 0.08rem 0.3rem;\nborder-radius: 4px;\nbackground: rgb(0 0 0 / 0.07);\nfont-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\nfont-size: 0.9em;\n}\n.pen-code {\nmargin: 0.45rem 0;\npadding: 0.55rem 0.75rem;\noverflow-x: auto;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-radius: 6px;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-code code {\npadding: 0;\nbackground: none;\n}\n.pen-table-wrap {\nmargin: 0.45rem 0;\noverflow-x: auto;\n}\n.pen-md table {\nborder-collapse: collapse;\nwidth: 100%;\nfont-size: 0.92rem;\n}\n.pen-md th,\n.pen-md td {\npadding: 0.32rem 0.55rem;\nborder: 1px solid #000;\ntext-align: left;\n}\n.pen-md th {\nfont-weight: 700;\nbackground: rgb(0 0 0 / 0.05);\n}\n.pen-disclosure {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.65rem;\nborder: 1px dashed #000;\nborder-radius: 6px;\n}\n.pen-disclosure summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-disclosure[open] summary {\nmargin-bottom: 0.3rem;\n}\n.pen-next-time {\nfont-weight: 600;\n}\n.pen-summary-card {\nmargin: 0.65rem 0;\npadding: 0.7rem 0.9rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nmargin: 0.55rem 0;\n}\n.pen-followup {\nmargin-top: 0.75rem;\npadding: 0.7rem 0.85rem;\nborder: 1px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-followup-thread {\ndisplay: flex;\nflex-direction: column;\ngap: 0.5rem;\n}\n.pen-followup-thread:not(:empty) {\nmargin-bottom: 0.6rem;\n}\n.pen-followup-msg {\npadding: 0.45rem 0.65rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 8px;\n}\n.pen-followup-student {\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-followup-who {\ndisplay: block;\nfont-size: 0.78rem;\nfont-weight: 700;\ntext-transform: uppercase;\nletter-spacing: 0.03em;\nopacity: 0.75;\nmargin-bottom: 0.15rem;\n}\n.pen-followup-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\n}\n.pen-followup-input {\nflex: 1 1 14rem;\nmin-width: 0;\nmin-height: 40px;\npadding: 0 0.65rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-followup-status {\nmargin: 0.35rem 0 0;\nfont-size: 0.88rem;\n}\n.pen-grader-backdrop {\nposition: fixed;\ninset: 0;\nz-index: 60;\ndisplay: grid;\nplace-items: center;\npadding: 1rem;\nbackground: rgb(0 0 0 / 0.5);\n}\n.pen-grader-card {\nwidth: min(440px, 100%);\npadding: 1rem 1.1rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.65rem;\n}\n.pen-grader-head {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\n}\n.pen-grader-note {\nmargin: 0;\nfont-size: 0.88rem;\nline-height: 1.4;\n}\n.pen-grader-label {\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-grader-label[hidden] {\ndisplay: none;\n}\n.pen-grader-field {\nmin-height: 38px;\npadding: 0.35rem 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-weight: 400;\n}\n.pen-grader-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nmargin-top: 0.2rem;\n}\n.pen-grader-actions .pen-send {\nmin-height: 38px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\ncursor: pointer;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #ffffff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.35) calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px));\n}\n.hwq-eink .pen-feedback,\n.hwq-eink .pen-badge,\n.hwq-eink .pen-verdict,\n.hwq-eink .pen-review-bar,\n.hwq-eink .pen-review-pill,\n.hwq-eink .pen-time-pill,\n.hwq-eink .pen-readiness,\n.hwq-eink .pen-pad-btn,\n.hwq-eink .pen-pad-pts,\n.hwq-eink .pen-pts-earned,\n.hwq-eink .pen-rubric-item,\n.hwq-eink .pen-hint-box,\n.hwq-eink .pen-confirm-bar,\n.hwq-eink .pen-prev-feedback,\n.hwq-eink .pen-boox-btn {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-score-pill,\n.hwq-eink .pen-confirm-send,\n.hwq-eink .pen-retry-missed {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\n.hwq-eink .pen-rubric-item[data-met=\"true\"] {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\nborder-width: 2px;\n}\n.hwq-eink .pen-nav-progress {\nbackground: #fff;\nborder: 1px solid #000;\n}\n.hwq-eink .pen-read-line {\ncolor: #000;\nborder-bottom-color: #000;\n}\n.hwq-eink .pen-feedback[data-verdict=\"partial\"],\n.hwq-eink .pen-feedback[data-verdict=\"incorrect\"] {\nborder-left-width: 6px;\n}\n.hwq-eink .pen-bar > .pen-timer-pill.pen-timer-low,\n.hwq-eink .pen-filter-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\nhtml.pen-dark body {\nbackground: #111317 !important;\ncolor: #e6e8ec !important;\n}\nhtml.pen-dark .pen-bar,\nhtml.pen-dark .pen-popover,\nhtml.pen-dark .pen-nav-popover,\nhtml.pen-dark .pen-pinned,\nhtml.pen-dark .pen-feedback,\nhtml.pen-dark .pen-summary-card,\nhtml.pen-dark .pen-followup,\nhtml.pen-dark .pen-grader-card,\nhtml.pen-dark .pen-review-bar,\nhtml.pen-dark .pen-confirm-bar,\nhtml.pen-dark .pen-prev-feedback,\nhtml.pen-dark .pen-hint-box,\nhtml.pen-dark .pen-sheet-card,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar,\nhtml[data-darkreader-scheme=\"dark\"] .pen-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-nav-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pinned {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-followup-input,\nhtml.pen-dark .pen-grader-field,\nhtml.pen-dark .pen-disclosure,\nhtml.pen-dark .pen-badge,\nhtml.pen-dark .pen-verdict,\nhtml.pen-dark .pen-review-pill,\nhtml.pen-dark .pen-time-pill,\nhtml.pen-dark .pen-pts-earned,\nhtml.pen-dark .pen-rubric-item,\nhtml.pen-dark .pen-readiness,\nhtml.pen-dark .pen-pad-pts {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-score-pill,\nhtml.pen-dark .pen-confirm-send,\nhtml.pen-dark .pen-retry-missed,\nhtml.pen-dark .pen-nav-progress-fill {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-nav-progress {\nbackground: rgb(255 255 255 / 0.14) !important;\n}\nhtml.pen-dark .pen-read-line {\ncolor: #b8c0cc !important;\nborder-bottom-color: #363c48 !important;\n}\nhtml.pen-dark .pen-md code,\nhtml.pen-dark .pen-code,\nhtml.pen-dark .pen-md blockquote,\nhtml.pen-dark .pen-md th,\nhtml.pen-dark .pen-followup-student {\nbackground: rgb(255 255 255 / 0.06) !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-pad-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pad-btn {\nbackground: rgb(28 31 38 / 0.9) !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button,\nhtml.pen-dark .pen-unpin,\nhtml.pen-dark .pen-sheet-btn,\nhtml.pen-dark .pen-boox-btn,\nhtml.pen-dark .pen-filter-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button,\nhtml[data-darkreader-scheme=\"dark\"] .pen-unpin,\nhtml[data-darkreader-scheme=\"dark\"] .pen-boox-btn {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button[aria-pressed=\"true\"],\nhtml.pen-dark .pen-pin-in[aria-pressed=\"true\"],\nhtml.pen-dark .pen-flag-in[aria-pressed=\"true\"],\nhtml.pen-dark .pen-filter-btn[aria-pressed=\"true\"],\nhtml.pen-dark pen-submit .pen-send,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-pin-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-flag-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] pen-submit .pen-send {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-popover .pen-swatch {\nbackground: var(--swatch, #1f2937) !important;\nbox-shadow: inset 0 0 0 2px #1c1f26 !important;\n}\nhtml.pen-dark .pen-popover .pen-swatch[aria-pressed=\"true\"] {\nborder-color: #e6e8ec !important;\n}\npen-header {\ndisplay: block;\nmargin: 0.75rem 0 1.25rem;\n}\n.pen-header-card {\npadding: 0.85rem 1rem;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-bottom: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-header-top {\ndisplay: flex;\nalign-items: flex-start;\njustify-content: space-between;\ngap: 0.75rem;\n}\n.pen-header-titles {\nflex: 1;\nmin-width: 0;\n}\n.pen-header-title {\nmargin: 0;\nfont-size: 1.38rem;\nline-height: 1.25;\n}\n.pen-header-sub {\nmargin: 0.28rem 0 0;\nfont-size: 0.93rem;\nopacity: 0.8;\n}\n.pen-header-bottom {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem 1rem;\nmargin-top: 0.65rem;\n}\n.pen-header-meta {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\n}\n.pen-meta-chip {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.14rem 0.52rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\n}\n.pen-student-wrap {\ndisplay: inline-flex;\nalign-items: center;\ngap: 0.4rem;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-student-input {\nmin-height: 32px;\nwidth: 13rem;\nmax-width: 55vw;\npadding: 0.15rem 0.5rem;\nborder: none;\nborder-bottom: 1.5px solid #000;\nbackground: transparent;\ncolor: inherit;\nfont: inherit;\nfont-weight: 400;\n}\n.pen-focus-hidden {\ndisplay: none !important;\n}\n.pen-focus-bar {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 1rem 0 1.25rem;\npadding: 0.55rem 0.75rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-focus-pos {\nfont-size: 0.9rem;\nfont-weight: 700;\n}\n.pen-confidence {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.35rem;\nmargin: 0.38rem 0 0.15rem;\n}\n.pen-confidence-label {\nfont-size: 0.82rem;\nopacity: 0.75;\nmargin-right: 0.15rem;\n}\n.pen-conf-btn {\nmin-height: 30px;\npadding: 0 0.6rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.82rem;\ncursor: pointer;\n}\n.pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\nfont-weight: 600;\n}\n.pen-conf-btn:disabled {\nopacity: 0.5;\ncursor: default;\n}\n.pen-conf-tag {\nfont-size: 0.78rem;\nfont-weight: 600;\npadding: 0.1rem 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 999px;\n}\n.pen-conf-warn,\n.pen-conf-warn-pill {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.14rem 0.52rem;\nborder: 1px solid #b45309;\nborder-radius: 999px;\nbackground: #fffbeb;\ncolor: #b45309;\n}\n.pen-progress-pill {\nfont-size: 0.82rem;\nfont-weight: 700;\npadding: 0.16rem 0.55rem;\nborder: 1px solid #15803d;\nborder-radius: 999px;\nbackground: #f0fdf4;\ncolor: #15803d;\n}\n.hwq-eink .pen-header-card,\n.hwq-eink .pen-meta-chip,\n.hwq-eink .pen-focus-bar,\n.hwq-eink .pen-conf-btn,\n.hwq-eink .pen-conf-tag,\n.hwq-eink .pen-conf-warn,\n.hwq-eink .pen-conf-warn-pill,\n.hwq-eink .pen-progress-pill {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml.pen-dark .pen-header-card,\nhtml.pen-dark .pen-focus-bar {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-meta-chip,\nhtml.pen-dark .pen-conf-btn,\nhtml.pen-dark .pen-conf-tag,\nhtml.pen-dark .pen-conf-warn,\nhtml.pen-dark .pen-conf-warn-pill,\nhtml.pen-dark .pen-progress-pill {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-student-input {\nborder-bottom-color: #6b7280 !important;\n}\nhtml.pen-dark .pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n.pen-backup-row {\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-backup-row button {\nflex: 1;\ntext-align: center;\npadding: 0 0.35rem;\nfont-size: 0.84rem;\n}\n.pen-selfcheck-box {\nmargin: 0.4rem 0 0.15rem;\npadding: 0.38rem 0.68rem;\nborder: 1px solid rgb(0 0 0 / 0.32);\nborder-radius: 8px;\nbackground: rgb(0 0 0 / 0.02);\n}\n.pen-selfcheck-box summary {\ncursor: pointer;\nfont-weight: 600;\nfont-size: 0.88rem;\nmin-height: 28px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-selfcheck-marks {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-top: 0.5rem;\npadding-top: 0.45rem;\nborder-top: 1px dashed rgb(0 0 0 / 0.2);\n}\n.pen-self-btn {\nmin-height: 32px;\npadding: 0 0.65rem;\nborder: 1px solid rgb(0 0 0 / 0.4);\nborder-radius: 999px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.84rem;\ncursor: pointer;\n}\n.pen-self-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\nfont-weight: 600;\n}\n.pen-reflection {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.4rem;\nmargin-top: 0.55rem;\npadding-top: 0.5rem;\nborder-top: 1px dashed rgb(0 0 0 / 0.2);\nfont-size: 0.88rem;\n}\n.pen-reflection-label {\nfont-weight: 600;\nwhite-space: nowrap;\n}\n.pen-reflection-input {\nflex: 1 1 14rem;\nmin-width: 0;\nmin-height: 34px;\npadding: 0.2rem 0.55rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 6px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-scratch-card {\nwidth: min(760px, 100%);\nmax-height: 90vh;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.55rem;\n}\n.pen-scratch-sub {\nfont-size: 0.84rem;\nopacity: 0.72;\n}\n.pen-scratch-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.3rem;\n}\n.pen-scratch-tools button[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\n.pen-scratch-body {\noverflow-y: auto;\nflex: 1;\nmin-height: 220px;\n}\n.hwq-eink .pen-selfcheck-box,\n.hwq-eink .pen-self-btn,\n.hwq-eink .pen-reflection-input,\n.hwq-eink .pen-scratch-card {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-self-btn[aria-pressed=\"true\"],\n.hwq-eink .pen-scratch-tools button[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml.pen-dark .pen-selfcheck-box,\nhtml.pen-dark .pen-scratch-card {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-self-btn,\nhtml.pen-dark .pen-reflection-input {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-self-btn[aria-pressed=\"true\"],\nhtml.pen-dark .pen-scratch-tools button[aria-pressed=\"true\"] {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n.pen-sheet-card {\nmargin-top: 0.75rem;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-sheet-head {\ndisplay: flex;\nalign-items: baseline;\njustify-content: space-between;\ngap: 0.5rem;\nfont-size: 1.05rem;\n}\n.pen-sheet-count {\nfont-size: 0.85rem;\npadding: 0.15rem 0.5rem;\nborder: 1px solid #000;\nborder-radius: 999px;\n}\n.pen-sheet-msg {\nmargin: 0.4rem 0 0.65rem;\nfont-size: 0.92rem;\n}\n.pen-sheet-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nmargin-bottom: 0.6rem;\n}\n.pen-sheet-btn {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.75rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\ntext-decoration: none;\ncursor: pointer;\n}\n.pen-sheet-btn[hidden] {\ndisplay: none;\n}\n.pen-sheet-skipped {\nmargin: 0.25rem 0 0.6rem;\nfont-size: 0.88rem;\n}\n.pen-sheet-item {\nmargin: 0.7rem 0;\npadding-top: 0.5rem;\nborder-top: 1px solid #000;\n}\n.pen-sheet-item-head {\nfont-weight: 700;\nfont-size: 0.95rem;\nmargin-bottom: 0.3rem;\n}\n.pen-sheet-typed {\nmargin: 0.25rem 0 0.4rem;\nwhite-space: pre-wrap;\n}\n.pen-sheet-fig {\nmargin: 0.35rem 0 0;\n}\n.pen-sheet-fig img {\ndisplay: block;\nmax-width: 100%;\nborder: 1px solid #000;\nborder-radius: 6px;\n}\n.pen-sheet-details {\nmargin-top: 0.65rem;\n}\n.pen-sheet-details summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 32px;\n}\n@media print {\npen-toolbar,\n.pen-tools,\n.pen-pad-btn,\n.pen-pad-top-actions,\n.pen-pinned,\n.pen-hint-box,\n.pen-confirm-bar,\n.pen-prev-feedback,\n.pen-sheet-actions,\n.pen-save,\n.pen-boox-btn,\n.pen-readiness,\n.pen-submit-utils,\n.pen-review-filters,\n.pen-followup-form,\n.pen-feedback-actions,\n.pen-grader-backdrop,\n.pen-focus-bar,\n.pen-focus-btn,\n.pen-confidence,\n.pen-selfcheck-box,\n.pen-reflection-empty,\npen-submit .pen-send {\ndisplay: none !important;\n}\n.pen-focus-hidden {\ndisplay: block !important;\n}\n.inkpad.pen-pad-empty::after {\ncontent: none !important;\n}\n.inkpad,\n.pen-feedback,\n.pen-summary-card,\n.pen-review-bar {\nbreak-inside: avoid;\npage-break-inside: avoid;\n}\n.pen-has-toolbar body,\nhtml.pen-has-toolbar.pen-rail-left body {\npadding-right: 0 !important;\npadding-left: 0 !important;\n}\n}";
 const WORDS = {
 exportFailed: "Your handwriting could not be prepared for hand-in. Your work is still here: keep writing or try handing in again.",
 correct: "✓ Correct",
@@ -2985,6 +2985,15 @@ sure: "Sure",
 studentNamePlaceholder: "Your name (optional)",
 prevQ: "← Previous",
 nextQ: "Next →",
+scratchpad: "📝 Scratchpad",
+saveBackup: "💾 Save",
+loadBackup: "📂 Load",
+checkMyAnswer: "📖 Check my answer",
+gotIt: "✓ Got it",
+almost: "◐ Almost",
+reviewAgain: "✗ Review again",
+myTakeaway: "💭 My takeaway:",
+takeawayPlaceholder: "One sentence in your own words to remember next time…",
 };
 function word(key) {
 try {
@@ -3007,6 +3016,9 @@ const storeKey = () => `pen:${hash(document.title + (localAgent()?.base ?? locat
 let saved = {};
 const flagged = new Set();
 const confidences = new Map();
+const reflections = new Map();
+const selfChecks = new Map();
+let scratchpadData = null;
 let studentName = "";
 let attempts = [];
 const saver = saveLater({
@@ -3014,7 +3026,22 @@ write: () => {
 const pens = Object.fromEntries(penInputs().map((p) => [p.name, p.pad.toJSON()]));
 const papers = Object.fromEntries(penInputs().filter((p) => !p.figureSource).map((p) => [p.name, p.pad.paper]));
 const confidence = Object.fromEntries([...confidences.entries()].filter(([, v]) => Boolean(v)));
-saved = { pens, papers, typed: Object.fromEntries(controlNames().map((name) => [name, controlValue(name)])), confidence, flagged: [...flagged], studentName, attempts, graded };
+const reflectionObj = Object.fromEntries([...reflections.entries()].filter(([, v]) => Boolean(v?.trim())));
+const selfCheckObj = Object.fromEntries([...selfChecks.entries()].filter(([, v]) => Boolean(v)));
+saved = {
+pens,
+papers,
+typed: Object.fromEntries(controlNames().map((name) => [name, controlValue(name)])),
+confidence,
+flagged: [...flagged],
+reflections: reflectionObj,
+selfChecks: selfCheckObj,
+scratchpad: scratchpadData,
+studentName,
+attempts,
+followUps,
+graded,
+};
 keep(storeKey(), JSON.stringify(saved));
 const answers = [...penInputs().map((p) => !p.pad.isEmpty), ...Object.values(saved.typed).map((v) => Boolean(v?.length))];
 reportProgress(answers.filter(Boolean).length, answers.length);
@@ -3178,6 +3205,30 @@ g.solution
 : h("p", {}, `${word("answer")} `, rich(g.correctAnswer, "pen-inline"))
 : null,
 g.nextTime ? h("p", { class: "pen-next-time" }, "👉 ", rich(g.nextTime, "pen-inline")) : null,
+g.verdict !== "correct" && typeof reflections !== "undefined"
+? (() => {
+const curNote = reflections.get(name) || "";
+const wrap = h(
+"label",
+{ class: `pen-reflection${curNote.trim() ? "" : " pen-reflection-empty"}` },
+h("span", { class: "pen-reflection-label" }, word("myTakeaway")),
+h("input", {
+type: "text",
+class: "pen-reflection-input",
+placeholder: word("takeawayPlaceholder"),
+value: curNote,
+oninput: (e) => {
+const val = e.target.value;
+if (val.trim()) reflections.set(name, val);
+else reflections.delete(name);
+wrap.classList.toggle("pen-reflection-empty", !val.trim());
+save();
+},
+}),
+);
+return wrap;
+})()
+: null,
 ),
 );
 }
@@ -3753,19 +3804,23 @@ const list = fieldSummaries();
 const targets = [];
 for (const f of list) {
 const g = f.grade;
+const sc = typeof selfChecks !== "undefined" ? selfChecks.get(f.id) : "";
+const verdict = g?.verdict || sc || "";
 const conf = confidences.get(f.id);
-const isWeak = g && (g.verdict === "partial" || g.verdict === "incorrect" || g.verdict === "blank");
-const isConfMistake = conf === "sure" && (g?.verdict === "incorrect" || g?.verdict === "partial");
-const isLuckyGuess = conf === "guess" && g?.verdict === "correct";
+const isWeak = verdict === "partial" || verdict === "incorrect" || verdict === "blank";
+const isConfMistake = conf === "sure" && (verdict === "incorrect" || verdict === "partial");
+const isLuckyGuess = conf === "guess" && verdict === "correct";
 if (!isWeak && !f.flagged && !isLuckyGuess) continue;
 const notes = [];
-if (g?.verdict) notes.push(`status: ${g.verdict}`);
+if (verdict) notes.push(`status: ${verdict}${!g && sc ? " (self-checked)" : ""}`);
 if (isConfMistake) notes.push("CONFIDENT MISTAKE (prioritize refuting this misconception!)");
 else if (isLuckyGuess) notes.push("guessed right (verify understanding with a fresh variant)");
 if (f.flagged) notes.push("flagged by student for review");
 if (g?.readAs) notes.push(`student wrote: ${g.readAs}`);
 if (g?.misconception) notes.push(`misconception: ${g.misconception}`);
 if (g?.nextTime) notes.push(`takeaway: ${g.nextTime}`);
+const refl = typeof reflections !== "undefined" ? reflections.get(f.id)?.trim() : "";
+if (refl) notes.push(`student's own reflection: ${refl}`);
 if (f.rubric?.length && Array.isArray(g?.met)) {
 const missedCrit = f.rubric.filter((_, idx) => !g.met.includes(idx + 1));
 if (missedCrit.length) notes.push(`unmet rubric criteria: ${missedCrit.join("; ")}`);
@@ -3818,21 +3873,25 @@ lines.push("## Teacher Notes", graded.markdown, "");
 const weakTopics = [];
 for (const f of list) {
 const g = f.grade;
-if (!g) continue;
-const statusLabel = g.badge || (g.verdict ? word(g.verdict) : "Reviewed");
-const ptsLabel = f.points && (g.verdict || g.points > 0) ? ` (${g.points}/${f.points} pts)` : "";
+const sc = typeof selfChecks !== "undefined" ? selfChecks.get(f.id) : "";
+if (!g && !sc) continue;
+const verdict = g?.verdict || sc || "";
+const statusLabel = g?.badge || (verdict ? word(verdict) : "Reviewed");
+const ptsLabel = g && f.points && (g.verdict || g.points > 0) ? ` (${g.points}/${f.points} pts)` : "";
 const conf = typeof confidences !== "undefined" ? confidences.get(f.id) : "";
 const confLabel = conf ? ` [${word(conf)}]` : "";
 const flagLabel = f.flagged ? " ⚑" : "";
 lines.push(`### ${f.index}. ${f.label} — ${statusLabel}${ptsLabel}${confLabel}${flagLabel}`);
-if (g.readAs) lines.push(`- **I read:** ${g.readAs}`);
-if (g.feedback || g.comment) lines.push(`- **Feedback:** ${g.feedback || g.comment}`);
-if (g.nudge) lines.push(`- **Hint:** ${g.nudge}`);
-if (g.solution || g.correctAnswer) lines.push(`- **Solution:** ${g.solution || g.correctAnswer}`);
-if (g.nextTime) lines.push(`- **Next time:** ${g.nextTime}`);
+if (g?.readAs) lines.push(`- **I read:** ${g.readAs}`);
+if (g?.feedback || g?.comment) lines.push(`- **Feedback:** ${g.feedback || g.comment}`);
+if (g?.nudge) lines.push(`- **Hint:** ${g.nudge}`);
+if (g?.solution || g?.correctAnswer) lines.push(`- **Solution:** ${g.solution || g.correctAnswer}`);
+if (g?.nextTime) lines.push(`- **Next time:** ${g.nextTime}`);
+const refl = typeof reflections !== "undefined" ? reflections.get(f.id)?.trim() : "";
+if (refl) lines.push(`- **My takeaway:** ${refl}`);
 lines.push("");
-if (g.verdict === "partial" || g.verdict === "incorrect" || g.verdict === "blank") {
-weakTopics.push(`- ${f.label}${g.nextTime ? `: ${g.nextTime}` : ""}`);
+if (verdict === "partial" || verdict === "incorrect" || verdict === "blank") {
+weakTopics.push(`- ${f.label}${g?.nextTime ? `: ${g.nextTime}` : refl ? `: ${refl}` : ""}`);
 }
 }
 if (followUps.length) {
@@ -3847,6 +3906,155 @@ return lines.join("\n").trim() + "\n";
 }
 function downloadStudyNotes() {
 downloadTextFile(`${slugOfTitle()}-review.md`, buildStudyNotesMarkdown(), "text/markdown;charset=utf-8");
+}
+function exportState() {
+const pens = Object.fromEntries(penInputs().map((p) => [p.name, p.pad.toJSON()]));
+const papers = Object.fromEntries(penInputs().filter((p) => !p.figureSource).map((p) => [p.name, p.pad.paper]));
+const typed = Object.fromEntries(controlNames().map((name) => [name, controlValue(name)]));
+return {
+version: 1,
+title: document.title || "Worksheet",
+exportedAt: new Date().toISOString(),
+studentName,
+pens,
+papers,
+typed,
+confidence: Object.fromEntries(confidences),
+flagged: [...flagged],
+reflections: Object.fromEntries(reflections),
+selfChecks: Object.fromEntries(selfChecks),
+scratchpad: scratchpadData,
+attempts,
+followUps,
+graded,
+};
+}
+function downloadBackup() {
+downloadTextFile(`${slugOfTitle()}.pen.json`, JSON.stringify(exportState(), null, 2), "application/json;charset=utf-8");
+}
+function importState(input) {
+const data = typeof input === "string" ? JSON.parse(input) : input;
+if (!data || typeof data !== "object") throw new Error("Invalid pen-sheet backup file");
+flagged.clear();
+if (Array.isArray(data.flagged)) data.flagged.forEach((id) => flagged.add(String(id)));
+confidences.clear();
+if (data.confidence && typeof data.confidence === "object") {
+for (const [k, v] of Object.entries(data.confidence)) {
+if (v === "guess" || v === "unsure" || v === "sure") confidences.set(k, v);
+}
+}
+reflections.clear();
+if (data.reflections && typeof data.reflections === "object") {
+for (const [k, v] of Object.entries(data.reflections)) {
+if (typeof v === "string" && v.trim()) reflections.set(k, v);
+}
+}
+selfChecks.clear();
+if (data.selfChecks && typeof data.selfChecks === "object") {
+for (const [k, v] of Object.entries(data.selfChecks)) {
+if (v === "correct" || v === "partial" || v === "incorrect") selfChecks.set(k, v);
+}
+}
+scratchpadData = data.scratchpad && typeof data.scratchpad === "object" ? data.scratchpad : null;
+studentName = typeof data.studentName === "string" ? data.studentName : "";
+attempts = Array.isArray(data.attempts) ? data.attempts.slice(-10) : [];
+followUps = Array.isArray(data.followUps) ? data.followUps.filter((m) => m && typeof m.text === "string") : [];
+if (data.typed && typeof data.typed === "object") restoreControls(data.typed);
+document.querySelectorAll(".pen-student-input").forEach((el) => (el.value = studentName));
+for (const p of penInputs()) {
+const snap = data.pens?.[p.name];
+if (snap && Array.isArray(snap.strokes)) {
+p.pad.strokes = snap.strokes.map((s) => ({ ...s, points: Array.isArray(s.points) ? s.points.map((pt) => [...pt]) : [] }));
+if (Number.isFinite(snap.height) && snap.height >= 100 && !p.figureSource) p.pad.height = snap.height;
+p.pad.history = [];
+p.pad.future = [];
+p.pad.layout();
+p.pad.redraw();
+}
+const paper = data.papers?.[p.name];
+if (paper && !p.figureSource && typeof p.pad.setPaper === "function") p.pad.setPaper(paper);
+p.querySelectorAll(".pen-conf-btn").forEach((b) => b.setAttribute("aria-pressed", String(confidences.get(p.name) === b.dataset.level)));
+p.querySelectorAll(".pen-self-btn").forEach((b) => b.setAttribute("aria-pressed", String(selfChecks.get(p.name) === b.dataset.self)));
+}
+graded = data.graded && typeof data.graded === "object" ? data.graded : null;
+if (graded) {
+showFeedback();
+} else {
+for (const p of penInputs()) p.pad.setMarks([]);
+showFeedback();
+status();
+lock(false);
+document.querySelectorAll("pen-submit .pen-send").forEach((b) => (b.hidden = false));
+}
+refreshTools();
+save();
+return true;
+}
+function openScratchpad() {
+document.getElementById("pen-scratch-backdrop")?.remove();
+let pad;
+const close = () => {
+if (pad) {
+scratchpadData = { ...pad.toJSON(), paper: pad.paper };
+pad.destroy();
+pad = null;
+save();
+}
+backdrop.remove();
+};
+pad = new InkPad({
+calm,
+height: scratchpadData?.height ?? 560,
+paper: scratchpadData?.paper ?? "grid",
+strokes: scratchpadData?.strokes,
+onChange: () => {
+scratchpadData = { ...pad.toJSON(), paper: pad.paper };
+save();
+},
+});
+const setPaper = (paper) => () => {
+pad.setPaper(paper);
+scratchpadData = { ...pad.toJSON(), paper: pad.paper };
+paperBtns.forEach((b) => b.setAttribute("aria-pressed", String(pad.paper === b.dataset.paper)));
+save();
+};
+const paperBtns = [
+["grid", word("paperGrid")],
+["ruled", word("paperRuled")],
+["blank", word("paperBlank")],
+].map(([p, label]) => h("button", { type: "button", class: "pen-sheet-btn", "data-paper": p, "aria-pressed": String(pad.paper === p), onclick: setPaper(p) }, label));
+const card = h(
+"div",
+{ class: "pen-scratch-card", role: "dialog", "aria-label": word("scratchpad") },
+h(
+"div",
+{ class: "pen-grader-head" },
+h("div", {}, h("strong", {}, word("scratchpad")), h("span", { class: "pen-scratch-sub" }, " · Rough work only (not submitted)")),
+h("button", { type: "button", class: "pen-unpin", onclick: close, title: "Close" }, "✕"),
+),
+h(
+"div",
+{ class: "pen-scratch-tools" },
+...paperBtns,
+h("button", { type: "button", class: "pen-sheet-btn", onclick: () => pad.undo() }, "↶"),
+h("button", { type: "button", class: "pen-sheet-btn", onclick: () => pad.redo() }, "↷"),
+h("button", { type: "button", class: "pen-sheet-btn", onclick: () => confirm(word("clearAsk")) && pad.clear() }, word("clear")),
+),
+h("div", { class: "pen-scratch-body" }, pad.el),
+);
+const backdrop = h(
+"div",
+{
+id: "pen-scratch-backdrop",
+class: "pen-grader-backdrop",
+onclick: (e) => {
+if (e.target === backdrop) close();
+},
+},
+card,
+);
+document.body.append(backdrop);
+pad.layout();
 }
 function followUpPanel() {
 const thread = h("div", { class: "pen-followup-thread" });
@@ -4480,16 +4688,20 @@ el.style.width = `${pct}%`;
 document.querySelectorAll("pen-toolbar .pen-nav-list").forEach((ul) => {
 ul.replaceChildren(
 ...list.map((f) => {
-const icon = f.grade
-? f.grade.verdict === "correct"
+const sc = selfChecks.get(f.id);
+const effectiveVerdict = f.grade?.verdict || sc || "";
+const icon = effectiveVerdict
+? effectiveVerdict === "correct"
 ? "✓"
-: f.grade.verdict === "partial"
+: effectiveVerdict === "partial"
 ? "◐"
-: f.grade.verdict === "incorrect"
+: effectiveVerdict === "incorrect"
 ? "✗"
-: f.grade.verdict === "blank"
+: effectiveVerdict === "blank"
 ? "–"
 : "★"
+: f.grade
+? "★"
 : f.flagged
 ? "⚑"
 : f.answered
@@ -4721,8 +4933,36 @@ menuBtn("pen-dark-btn", word("dark"), toggleDark),
 menuBtn("pen-focus-btn", word(focusMode ? "focusOff" : "focusOn"), () => ((menuOpen = false), toggleFocus())),
 menuBtn("pen-rail-btn", word(isRailLeft() ? "railRight" : "railLeft"), toggleRail),
 menuBtn("pen-fingers", word(fingersDraw() ? "fingerDraws" : "fingerScrolls"), toggleFingers),
+menuBtn("pen-scratch-menu", word("scratchpad"), () => ((menuOpen = false), refreshTools(), openScratchpad())),
 menuBtn("pen-boox-menu", word("booxPdf"), () => ((menuOpen = false), refreshTools(), downloadBooxPdf())),
 menuBtn("pen-ai-menu", word("copyForAi"), () => ((menuOpen = false), refreshTools(), exportForAI())),
+(() => {
+const loadInput = h("input", {
+type: "file",
+accept: "application/json,.json,.pen.json",
+hidden: true,
+onchange: async (e) => {
+const file = e.target.files?.[0];
+e.target.value = "";
+if (!file) return;
+try {
+importState(await file.text());
+menuOpen = false;
+refreshTools();
+status(h("p", { class: "pen-sheet-msg" }, `✓ Restored backup from ${file.name}`));
+} catch (err) {
+status(h("p", { role: "alert" }, `Could not load backup (${String(err?.message || "invalid file").slice(0, 100)}).`));
+}
+},
+});
+return h(
+"div",
+{ class: "pen-backup-row" },
+menuBtn("pen-backup-save", word("saveBackup"), () => ((menuOpen = false), refreshTools(), downloadBackup())),
+menuBtn("pen-backup-load", word("loadBackup"), () => loadInput.click()),
+loadInput,
+);
+})(),
 !isArtifactHost() ? menuBtn("pen-grader-menu", word("graderSetup"), () => ((menuOpen = false), refreshTools(), openGraderSetup())) : null,
 menuBtn("pen-clear", word("clear"), clearPad),
 ),
@@ -4897,6 +5137,46 @@ const hintText = this.getAttribute("hint")?.trim();
 const hintBox = hintText
 ? h("details", { class: "pen-hint-box" }, h("summary", {}, word("hintTitle")), richMarkdown(hintText, "pen-md"))
 : null;
+const solutionText = this.getAttribute("solution")?.trim();
+const selfCheckBox =
+solutionText && this.name
+? (() => {
+const box = h(
+"details",
+{ class: "pen-selfcheck-box" },
+h("summary", {}, word("checkMyAnswer")),
+richMarkdown(solutionText, "pen-md"),
+h(
+"div",
+{ class: "pen-selfcheck-marks", role: "group", "aria-label": "Self-check rating" },
+...[
+["correct", word("gotIt")],
+["partial", word("almost")],
+["incorrect", word("reviewAgain")],
+].map(([v, label]) =>
+h(
+"button",
+{
+type: "button",
+class: "pen-self-btn",
+"data-self": v,
+"aria-pressed": String(selfChecks.get(this.name) === v),
+onclick: () => {
+if (selfChecks.get(this.name) === v) selfChecks.delete(this.name);
+else selfChecks.set(this.name, v);
+box.querySelectorAll(".pen-self-btn").forEach((b) => b.setAttribute("aria-pressed", String(selfChecks.get(this.name) === b.dataset.self)));
+refreshTools();
+save();
+},
+},
+label,
+),
+),
+),
+);
+return box;
+})()
+: null;
 const askConfidence = this.hasAttribute("confidence") || Boolean(document.querySelector("pen-submit[confidence]"));
 const confBox =
 askConfidence && this.name
@@ -4942,6 +5222,7 @@ this.redoBtn,
 this.pad.el,
 ...(confBox ? [confBox] : []),
 ...(hintBox ? [hintBox] : []),
+...(selfCheckBox ? [selfCheckBox] : []),
 );
 refreshTools();
 if (graded) showFeedback();
@@ -5169,6 +5450,10 @@ studyNotes: buildStudyNotesMarkdown,
 followUpPrompt: buildFollowUpDrillPrompt,
 attempts: () => [...attempts],
 toggleFocus,
+openScratchpad,
+exportState,
+importState,
+downloadBackup,
 downloadBooxPdf,
 gradeFiles,
 exportForAI,
@@ -5210,6 +5495,18 @@ for (const [k, v] of Object.entries(saved.confidence)) {
 if (v === "guess" || v === "unsure" || v === "sure") confidences.set(k, v);
 }
 }
+if (saved.reflections && typeof saved.reflections === "object") {
+for (const [k, v] of Object.entries(saved.reflections)) {
+if (typeof v === "string" && v.trim()) reflections.set(k, v);
+}
+}
+if (saved.selfChecks && typeof saved.selfChecks === "object") {
+for (const [k, v] of Object.entries(saved.selfChecks)) {
+if (v === "correct" || v === "partial" || v === "incorrect") selfChecks.set(k, v);
+}
+}
+if (saved.scratchpad && typeof saved.scratchpad === "object") scratchpadData = saved.scratchpad;
+if (Array.isArray(saved.followUps)) followUps = saved.followUps.filter((m) => m && typeof m.text === "string");
 if (typeof saved.studentName === "string") studentName = saved.studentName;
 if (Array.isArray(saved.attempts)) attempts = saved.attempts.slice(-10);
 if (!customElements.get("pen-header")) customElements.define("pen-header", PenHeaderElement);
@@ -5224,6 +5521,29 @@ if ((menuOpen || navOpen) && !e.target?.closest?.("pen-toolbar")) {
 menuOpen = false;
 navOpen = false;
 refreshTools();
+}
+});
+document.addEventListener("keydown", (e) => {
+if (e.key === "Escape") {
+if (document.getElementById("pen-scratch-backdrop")) {
+document.querySelector("#pen-scratch-backdrop .pen-unpin")?.click();
+} else if (document.getElementById("pen-grader-backdrop")) {
+document.getElementById("pen-grader-backdrop")?.remove();
+} else if (menuOpen || navOpen) {
+menuOpen = false;
+navOpen = false;
+refreshTools();
+}
+return;
+}
+if (focusMode && e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+const groups = focusGroups();
+if (groups.length > 1) {
+e.preventDefault();
+focusIndex = Math.max(0, Math.min(groups.length - 1, focusIndex + (e.key === "ArrowRight" ? 1 : -1)));
+applyFocusMode();
+refreshTools();
+}
 }
 });
 document.addEventListener("keydown", onUndoRedoKey);
