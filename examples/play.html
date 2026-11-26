@@ -71,6 +71,7 @@
       document.documentElement.lang = String(spec.lang || "en");
       if (spec.fblang) document.documentElement.dataset.feedbackLang = String(spec.fblang);
       if (spec.eink !== false) document.documentElement.classList.add("hwq-eink");
+      if (spec.wide) document.documentElement.classList.add("pen-wide");
 
       const toolbar = document.createElement("pen-toolbar");
       if (Number(spec.timer) > 0) toolbar.setAttribute("timer", String(Math.round(Number(spec.timer))));

@@ -89,6 +89,7 @@
       </div>
       <div class="checks">
         <label class="inline"><input type="checkbox" id="w-eink" checked> E-ink default (<code>hwq-eink</code>)</label>
+        <label class="inline"><input type="checkbox" id="w-wide"> Full width default (<code>pen-wide</code>)</label>
         <label class="inline"><input type="checkbox" id="w-name" checked> Student Name field</label>
         <label class="inline"><input type="checkbox" id="w-conf" checked> Confidence chips</label>
         <label class="inline"><input type="checkbox" id="w-aihints"> Live AI nudges (<code>ai-hints</code>)</label>
@@ -230,6 +231,7 @@
       const lang = document.getElementById("w-lang").value.trim() || "en";
       const fblang = document.getElementById("w-fblang").value.trim();
       const eink = document.getElementById("w-eink").checked;
+      const wide = document.getElementById("w-wide").checked;
       const askName = document.getElementById("w-name").checked;
       const conf = document.getElementById("w-conf").checked;
       const aiHints = document.getElementById("w-aihints").checked;
@@ -238,7 +240,8 @@
       const customPrompt = document.getElementById("w-prompt").value.trim();
       const refSheet = document.getElementById("w-ref").value.trim();
 
-      const htmlAttrs = [`lang="${escAttr(lang)}"`, fblang ? `data-feedback-lang="${escAttr(fblang)}"` : "", eink ? 'class="hwq-eink"' : ""].filter(Boolean).join(" ");
+      const cls = [eink ? "hwq-eink" : "", wide ? "pen-wide" : ""].filter(Boolean).join(" ");
+      const htmlAttrs = [`lang="${escAttr(lang)}"`, fblang ? `data-feedback-lang="${escAttr(fblang)}"` : "", cls ? `class="${cls}"` : ""].filter(Boolean).join(" ");
       const toolbarTag = timer > 0 ? `<pen-toolbar timer="${timer}"></pen-toolbar>` : "<pen-toolbar></pen-toolbar>";
       const headerTag = `<pen-header${sub ? ` subtitle="${escAttr(sub)}"` : ""}${askName ? " student-name" : ""}></pen-header>`;
       const refTag = refSheet ? `\n  <pen-reference title="Formula Sheet">${escHtml(refSheet)}</pen-reference>` : "";
@@ -401,7 +404,7 @@ ${sections}
       setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 3000);
     };
 
-    document.querySelectorAll("#w-title,#w-sub,#w-timer,#w-mode,#w-lang,#w-fblang,#w-eink,#w-name,#w-conf,#w-aihints,#w-exam,#w-closedbook,#w-prompt,#w-ref").forEach((el) => {
+    document.querySelectorAll("#w-title,#w-sub,#w-timer,#w-mode,#w-lang,#w-fblang,#w-eink,#w-wide,#w-name,#w-conf,#w-aihints,#w-exam,#w-closedbook,#w-prompt,#w-ref").forEach((el) => {
       el.addEventListener("input", schedulePreview);
       el.addEventListener("change", schedulePreview);
     });
@@ -563,6 +566,7 @@ ${sections}
         lang: document.getElementById("w-lang").value.trim() || "en",
         fblang: document.getElementById("w-fblang").value.trim(),
         eink: document.getElementById("w-eink").checked,
+        wide: document.getElementById("w-wide").checked,
         name: document.getElementById("w-name").checked,
         conf: document.getElementById("w-conf").checked,
         aiHints: document.getElementById("w-aihints").checked,
@@ -612,6 +616,7 @@ ${sections}
       document.getElementById("w-lang").value = doc.documentElement.lang || "en";
       document.getElementById("w-fblang").value = doc.documentElement.dataset.feedbackLang || "";
       document.getElementById("w-eink").checked = doc.documentElement.classList.contains("hwq-eink");
+      document.getElementById("w-wide").checked = doc.documentElement.classList.contains("pen-wide") || Boolean(hdr?.hasAttribute("wide"));
       const sub = doc.querySelector("pen-submit");
       document.getElementById("w-mode").value = sub?.getAttribute("mode") || "coach";
       document.getElementById("w-prompt").value = sub?.getAttribute("prompt") || "";
@@ -685,6 +690,7 @@ ${sections}
         document.getElementById("w-lang").value = saved.lang || "en";
         document.getElementById("w-fblang").value = saved.fblang || "";
         document.getElementById("w-eink").checked = saved.eink !== false;
+        document.getElementById("w-wide").checked = Boolean(saved.wide);
         document.getElementById("w-name").checked = Boolean(saved.name);
         document.getElementById("w-conf").checked = Boolean(saved.conf);
         document.getElementById("w-aihints").checked = Boolean(saved.aiHints);

@@ -57,7 +57,7 @@ Before writing HTML, design prompts where **handwriting pays off**:
 ### Component attributes
 
 - **`<pen-header>`** (optional zero-boilerplate exam cover strip):
-  - Automatically renders the title (`title="..."` or `<title>`), `subtitle="..."`, live metadata chips (`3 questions`, `10 pts`, `⏱ 15 min`), a **`🎯 Focus mode`** toggle (one question at a time for zero e-ink scroll ghosting), and an optional `student-name` input (persisted across reloads, automatically stamped into exported PDFs and Markdown Study Notes, never treated as a graded question). Also applies clean, low-specificity editorial page typography so you don't even need a `<style>` block.
+  - Automatically renders the title (`title="..."` or `<title>`), `subtitle="..."`, live metadata chips (`3 questions`, `10 pts`, `⏱ 15 min`), a **`↔ Full width`** expand toggle (`Alt+W`, or add `wide` on `<pen-header>` / `class="pen-wide"` on `<html>` to start full-width by default), a **`🎯 Focus mode`** toggle (one question at a time for zero e-ink scroll ghosting), and an optional `student-name` input (persisted across reloads, automatically stamped into exported PDFs and Markdown Study Notes, never treated as a graded question). Also applies clean, low-specificity editorial page typography so you don't even need a `<style>` block.
 - **`<pen-reference title="Formula Sheet">...</pen-reference>`** (optional exam reference / formula drawer):
   - Keeps formulas, theorems, constants, or grammar tables tucked inside a crisp slide-over drawer accessible on **every question (including Focus mode)** via a `📐` button in `<pen-header>`, `⚙`, or `Alt+R`. Supports raw HTML or Markdown + `$math$`.
 - **`<pen-toolbar>`**:
