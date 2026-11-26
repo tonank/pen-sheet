@@ -15,8 +15,9 @@
       color: #000;
     }
     .note { margin: 0 0 1rem; font-size: 0.92rem; opacity: 0.85; }
-    .gallery { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0 0 1.15rem; font-size: 0.86rem; }
-    .gallery a { color: inherit; padding: 0.2rem 0.55rem; border: 1px solid currentColor; border-radius: 999px; text-decoration: none; }
+    .gallery { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; margin: 0 0 1rem; font-size: 0.86rem; }
+    .gallery a, .gallery button { color: inherit; background: transparent; padding: 0.22rem 0.58rem; border: 1px solid currentColor; border-radius: 999px; text-decoration: none; font: inherit; cursor: pointer; }
+    .gallery code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; }
     section { margin: 1.25rem 0; }
     h2 { font-size: 1.05rem; margin: 0 0 0.35rem; }
     @media print { .note, .gallery { display: none !important; } }
@@ -25,14 +26,22 @@
 <body>
   <pen-toolbar timer="15"></pen-toolbar>
   <pen-header subtitle="Write with your stylus — scribble to erase, hold a line to straighten, tap ⚑ to flag, or 🎯 Focus mode for one question at a time." student-name></pen-header>
+  <pen-reference title="Quick Controls &amp; Tips">
+- **Scribble-to-erase:** scratch back and forth over any stroke to erase it.
+- **Straight lines:** draw a line and hold the pen still for half a second.
+- **Shortcuts:** `Alt+R` Formula sheet · `Alt+S` Scratchpad · `Alt+F` Focus mode · `Alt+←/→` Prev/Next question · `Ctrl/Cmd+Z` Undo.
+- **Teacher / self review:** tap **⚙ → 🖍 Teacher review** to stamp red-pen marks (`✓ ✗ ○ ?`) directly onto handwriting, or **▶ Replay** after hand-in to watch the strokes unfold.
+  </pen-reference>
   <nav class="gallery" aria-label="More worksheet examples">
     <span>Explore:</span>
-    <a href="./examples/builder.html">✨ Build your own</a>
+    <a href="./examples/builder.html">✨ Worksheet Studio</a>
     <a href="./examples/algorithms-midterm.html">Algorithms Midterm</a>
     <a href="./examples/calculus-physics.html">Calculus &amp; Physics</a>
     <a href="./examples/language-journal.html">German Journal</a>
+    <a href="https://github.com/tonank/pen-sheet" target="_blank" rel="noopener">GitHub</a>
+    <button type="button" id="copy-skill-cmd" title="Install as an AI Agent Skill (Claude Code, Codex, Antigravity, Gemini CLI)">📋 <code>npx skills add tonank/pen-sheet</code></button>
   </nav>
-  <p class="note">Connect your own ChatGPT, Gemini, or Claude key via <strong>⚙ → 🤖 Grader setup</strong> for live Socratic coaching, or use <strong>📋 Copy for AI</strong> / <strong>📄 Download PDF</strong>.</p>
+  <p class="note">Connect your own ChatGPT, Gemini, or Claude key via <strong>⚙ → 🤖 Grader setup</strong> for live Socratic coaching, grade offline via <strong>⚙ → 🖍 Teacher review</strong>, or use <strong>📋 Copy for AI</strong> / <strong>📄 Download PDF</strong>.</p>
 
   <section>
     <h2>1. Solve for x and show each step: 3(x − 4) = 15</h2>
@@ -42,6 +51,7 @@
       points="4"
       rubric="Distribute or divide first | Isolate x cleanly | Check the answer"
       hint="You can either expand $3(x - 4)$ first, or divide both sides by $3$ right away."
+      solution="Divide both sides by $3$: $x - 4 = 5$, so $x = 9$. Check: $3(9 - 4) = 3(5) = 15$."
       placeholder="Show each algebra step…"
       paper="grid"
       height="420"
@@ -79,7 +89,18 @@
   </section>
 
   <!-- Point endpoint="..." at your hosted grader, or serve with `pen-sheet serve` -->
-  <pen-submit agent="Teacher">Ready — grade my test</pen-submit>
+  <pen-submit agent="Teacher" ai-hints>Ready — grade my test</pen-submit>
   <script src="pen-sheet.js"></script>
+  <script>
+    document.getElementById("copy-skill-cmd")?.addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      try {
+        await navigator.clipboard.writeText("npx skills add tonank/pen-sheet");
+        const prev = btn.innerHTML;
+        btn.textContent = "✓ Copied install command!";
+        setTimeout(() => { btn.innerHTML = prev; }, 2200);
+      } catch {}
+    });
+  </script>
 </body>
 </html>

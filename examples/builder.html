@@ -85,6 +85,7 @@
         <label class="inline"><input type="checkbox" id="w-name" checked> Student Name field</label>
         <label class="inline"><input type="checkbox" id="w-conf" checked> Confidence chips</label>
         <label class="inline"><input type="checkbox" id="w-aihints"> Live AI nudges (<code>ai-hints</code>)</label>
+        <label class="inline"><input type="checkbox" id="w-exam"> Exam lockdown (<code>exam</code> — hides hints/AI setup)</label>
         <label class="inline"><input type="checkbox" id="w-closedbook"> Closed-book export (strip solutions from student copy)</label>
       </div>
       <label>Custom AI Coaching Instructions (optional)
@@ -94,9 +95,22 @@
         <textarea id="w-ref" placeholder="e.g. - **Chain rule:** $(f(g(x)))' = f'(g(x))g'(x)$&#10;- **Quadratic formula:** $x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$"></textarea>
       </label>
 
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.45rem;margin-top:1.1rem">
         <h2 style="margin:0">2. Questions</h2>
-        <button type="button" id="btn-add">+ Add Question</button>
+        <div style="display:flex;gap:0.4rem">
+          <button type="button" class="ghost" id="btn-paste-toggle">📋 Paste Questions</button>
+          <button type="button" id="btn-add">+ Add Question</button>
+        </div>
+      </div>
+      <div id="paste-box" hidden style="margin-top:0.65rem;padding:0.75rem;border:1px solid var(--border);border-radius:10px;background:#f8fafc">
+        <label>Paste a numbered Markdown or plain-text quiz (supports <code>[4 pts]</code>, <code>Rubric:</code>, <code>Hint:</code>, <code>Solution:</code>, <code>Say:</code>)
+          <textarea id="paste-input" style="min-height:110px;font-family:ui-monospace,monospace;font-size:0.84rem" placeholder="1. Solve 2x + 5 = 17 [4 pts]&#10;Show every step cleanly.&#10;Rubric: Subtract 5 | Divide by 2 | Check solution&#10;Hint: Start by isolating the 2x term.&#10;Solution: $x = 6$&#10;&#10;2. Explain why a hash table has O(1) average lookup [3 pts]"></textarea>
+        </label>
+        <div style="display:flex;gap:0.45rem;margin-top:0.5rem">
+          <button type="button" class="primary" id="btn-paste-replace">Replace Questions</button>
+          <button type="button" class="ghost" id="btn-paste-append">Append to List</button>
+          <button type="button" class="ghost" id="btn-paste-cancel">Cancel</button>
+        </div>
       </div>
       <div class="q-list" id="q-list"></div>
     </section>
@@ -201,6 +215,7 @@
       const askName = document.getElementById("w-name").checked;
       const conf = document.getElementById("w-conf").checked;
       const aiHints = document.getElementById("w-aihints").checked;
+      const exam = document.getElementById("w-exam").checked;
       const closedBook = document.getElementById("w-closedbook").checked;
       const customPrompt = document.getElementById("w-prompt").value.trim();
       const refSheet = document.getElementById("w-ref").value.trim();
@@ -209,7 +224,7 @@
       const toolbarTag = timer > 0 ? `<pen-toolbar timer="${timer}"></pen-toolbar>` : "<pen-toolbar></pen-toolbar>";
       const headerTag = `<pen-header${sub ? ` subtitle="${escAttr(sub)}"` : ""}${askName ? " student-name" : ""}></pen-header>`;
       const refTag = refSheet ? `\n  <pen-reference title="Formula Sheet">${escHtml(refSheet)}</pen-reference>` : "";
-      const submitAttrs = [mode !== "coach" ? `mode="${escAttr(mode)}"` : "", aiHints ? "ai-hints" : "", customPrompt ? `prompt="${escAttr(customPrompt)}"` : ""].filter(Boolean).join(" ");
+      const submitAttrs = [mode !== "coach" ? `mode="${escAttr(mode)}"` : "", exam ? "exam" : "", aiHints && !exam ? "ai-hints" : "", customPrompt ? `prompt="${escAttr(customPrompt)}"` : ""].filter(Boolean).join(" ");
 
       const sections = questions.map((q, idx) => {
         const id = `q${idx + 1}`;
@@ -335,10 +350,82 @@ ${sections}
       setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 3000);
     };
 
-    document.querySelectorAll("#w-title,#w-sub,#w-timer,#w-mode,#w-lang,#w-fblang,#w-eink,#w-name,#w-conf,#w-aihints,#w-closedbook,#w-prompt,#w-ref").forEach((el) => {
+    document.querySelectorAll("#w-title,#w-sub,#w-timer,#w-mode,#w-lang,#w-fblang,#w-eink,#w-name,#w-conf,#w-aihints,#w-exam,#w-closedbook,#w-prompt,#w-ref").forEach((el) => {
       el.addEventListener("input", schedulePreview);
       el.addEventListener("change", schedulePreview);
     });
+    function parsePastedQuestions(raw) {
+      const blocks = String(raw || "")
+        .replace(/\r\n/g, "\n")
+        .split(/\n(?=\s*(?:#{1,3}\s+)?(?:\d+[.)]|Q\d+[:.)])\s+)/i)
+        .map((b) => b.trim())
+        .filter(Boolean);
+      const out = [];
+      for (const block of blocks) {
+        const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
+        if (!lines.length) continue;
+        let head = lines[0].replace(/^#{1,3}\s+/, "").replace(/^(?:\d+[.)]|Q\d+[:.)])\s+/i, "").trim();
+        let points = 0;
+        const ptsMatch = head.match(/\s*[\[(](\d+(?:\.\d+)?)\s*(?:pts?|points?|p)[\])]\s*$/i);
+        if (ptsMatch) {
+          points = Number(ptsMatch[1]) || 0;
+          head = head.slice(0, ptsMatch.index).trim();
+        }
+        const promptLines = [];
+        let rubric = "", hint = "", solution = "", say = "", paper = "";
+        for (const line of lines.slice(1)) {
+          const m = line.match(/^(?:[-*]\s*)?(rubric|hint|solution|answer|say|dictation|paper)\s*:\s*(.+)$/i);
+          if (m) {
+            const key = m[1].toLowerCase();
+            const val = m[2].trim();
+            if (key === "rubric") rubric = rubric ? `${rubric} | ${val}` : val;
+            else if (key === "hint") hint = val;
+            else if (key === "solution" || key === "answer") solution = val;
+            else if (key === "say" || key === "dictation") say = val;
+            else if (key === "paper" && /^(grid|ruled|blank)$/i.test(val)) paper = val.toLowerCase();
+          } else {
+            promptLines.push(line);
+          }
+        }
+        const idx = out.length + 1;
+        const looksMath = /[=+\-*/^∫∑√]|solve|derive|compute|differentiate|integrate|matrix|graph|prove/i.test(head + " " + promptLines.join(" "));
+        out.push({
+          heading: `${idx}. ${head}`,
+          prompt: promptLines.join(" "),
+          label: head.slice(0, 42),
+          paper: paper || (looksMath ? "grid" : "ruled"),
+          height: looksMath ? 420 : 340,
+          points,
+          rubric,
+          hint,
+          solution,
+          say,
+          svg: "none",
+        });
+      }
+      return out;
+    }
+    const pasteBox = document.getElementById("paste-box");
+    const pasteInput = document.getElementById("paste-input");
+    document.getElementById("btn-paste-toggle").onclick = () => {
+      pasteBox.hidden = !pasteBox.hidden;
+      if (!pasteBox.hidden) pasteInput.focus();
+    };
+    document.getElementById("btn-paste-cancel").onclick = () => { pasteBox.hidden = true; };
+    const applyPasted = (append) => {
+      const parsed = parsePastedQuestions(pasteInput.value);
+      if (!parsed.length) return showToast("⚠ Paste at least one numbered question (e.g. 1. Solve...)");
+      questions = append
+        ? [...questions, ...parsed.map((q, i) => ({ ...q, heading: `${questions.length + i + 1}. ${q.heading.replace(/^\d+\.\s*/, "")}` }))]
+        : parsed;
+      pasteBox.hidden = true;
+      pasteInput.value = "";
+      renderQuestions();
+      schedulePreview();
+      showToast(`✓ Imported ${parsed.length} question${parsed.length === 1 ? "" : "s"} from text!`);
+    };
+    document.getElementById("btn-paste-replace").onclick = () => applyPasted(false);
+    document.getElementById("btn-paste-append").onclick = () => applyPasted(true);
     const PRESETS = {
       linalg: {
         title: "Linear Algebra Checkpoint", sub: "Show every step clearly; check determinants and intercepts.", timer: 20, mode: "coach", lang: "en", fblang: "", eink: true, name: true, conf: true, closedBook: false,
@@ -427,6 +514,8 @@ ${sections}
         eink: document.getElementById("w-eink").checked,
         name: document.getElementById("w-name").checked,
         conf: document.getElementById("w-conf").checked,
+        aiHints: document.getElementById("w-aihints").checked,
+        exam: document.getElementById("w-exam").checked,
         prompt: document.getElementById("w-prompt").value.trim(),
         ref: document.getElementById("w-ref").value.trim(),
         questions: questions.map((q) => ({ ...q, ...(closedBook ? { hint: "", solution: "" } : {}) })),
@@ -476,6 +565,7 @@ ${sections}
       document.getElementById("w-mode").value = sub?.getAttribute("mode") || "coach";
       document.getElementById("w-prompt").value = sub?.getAttribute("prompt") || "";
       document.getElementById("w-aihints").checked = Boolean(sub?.hasAttribute("ai-hints"));
+      document.getElementById("w-exam").checked = Boolean(sub?.hasAttribute("exam") || tb?.hasAttribute("exam"));
       const refEl = doc.querySelector("pen-reference");
       document.getElementById("w-ref").value = refEl?.textContent?.trim() || "";
       const pens = [...doc.querySelectorAll("pen-input")];

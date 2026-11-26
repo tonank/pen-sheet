@@ -119,6 +119,8 @@
 
       const submit = document.createElement("pen-submit");
       if (["coach", "free", "strict"].includes(spec.mode) && spec.mode !== "coach") submit.setAttribute("mode", spec.mode);
+      if (spec.exam) submit.setAttribute("exam", "");
+      if (spec.aiHints && !spec.exam) submit.setAttribute("ai-hints", "");
       if (spec.prompt) submit.setAttribute("prompt", String(spec.prompt));
       submit.textContent = "Hand in for coaching";
       frag.append(submit);
