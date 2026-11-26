@@ -7,18 +7,22 @@
   <style>
     :root { --bg: #f8fafc; --card: #ffffff; --fg: #0f172a; --muted: #475569; --border: #cbd5e1; --accent: #0f172a; }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.5; }
     header { background: var(--card); border-bottom: 1px solid var(--border); padding: 1rem 1.25rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
     header h1 { margin: 0; font-size: 1.2rem; }
     header p { margin: 0.15rem 0 0; font-size: 0.88rem; color: var(--muted); }
-    .top-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+    .top-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
+    .top-actions select { width: auto; min-height: 38px; padding: 0 0.7rem; }
     button, .btn { min-height: 38px; padding: 0 0.85rem; border: 1px solid var(--accent); border-radius: 8px; background: var(--card); color: var(--fg); font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem; }
     button.primary { background: var(--accent); color: #fff; }
     button.ghost { border-color: var(--border); font-weight: 500; }
-    main { max-width: 1280px; margin: 0 auto; padding: 1rem 1.25rem 3rem; display: grid; grid-template-columns: minmax(340px, 1fr) minmax(360px, 1.05fr); gap: 1.25rem; align-items: start; }
-    @media (max-width: 920px) { main { grid-template-columns: 1fr; } }
-    .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
+    button.ghost[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+    main { max-width: 1360px; margin: 0 auto; padding: 1rem 1.25rem 3rem; display: grid; grid-template-columns: minmax(340px, 1fr) minmax(380px, 1.08fr); gap: 1.25rem; align-items: start; }
+    @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
+    .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; box-shadow: 0 1px 2px rgb(15 23 42 / 0.04); }
     .panel h2 { margin: 0 0 0.75rem; font-size: 1rem; }
+    .meta-pill { font-size: 0.8rem; font-weight: 600; color: var(--muted); background: #f1f5f9; border: 1px solid var(--border); border-radius: 999px; padding: 0.16rem 0.6rem; }
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
     @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
     label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.84rem; font-weight: 600; color: var(--fg); }
@@ -33,9 +37,12 @@
     .q-btns { display: flex; gap: 0.3rem; }
     .q-btns button { min-height: 30px; padding: 0 0.5rem; font-size: 0.8rem; }
     .preview-wrap { position: sticky; top: 1rem; }
-    .preview-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; }
-    iframe { width: 100%; height: 74vh; min-height: 520px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
-    .toast { font-size: 0.84rem; color: #15803d; font-weight: 600; }
+    .preview-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; }
+    .vp-bar { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+    .vp-bar button { min-height: 30px; padding: 0 0.55rem; font-size: 0.8rem; }
+    .preview-stage { display: flex; justify-content: center; background: #f1f5f9; border: 1px solid var(--border); border-radius: 10px; padding: 0.5rem; overflow: auto; }
+    iframe { width: 100%; max-width: 100%; height: 74vh; min-height: 520px; border: 1px solid var(--border); border-radius: 8px; background: #fff; transition: width 150ms ease; }
+    .toast { font-size: 0.84rem; color: #15803d; font-weight: 600; min-height: 1.25em; }
   </style>
 </head>
 <body>
@@ -96,7 +103,10 @@
       </label>
 
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.45rem;margin-top:1.1rem">
-        <h2 style="margin:0">2. Questions</h2>
+        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0">2. Questions</h2>
+          <span class="meta-pill" id="q-stats"></span>
+        </div>
         <div style="display:flex;gap:0.4rem">
           <button type="button" class="ghost" id="btn-paste-toggle">📋 Paste Questions</button>
           <button type="button" id="btn-add">+ Add Question</button>
@@ -118,9 +128,17 @@
     <section class="panel preview-wrap">
       <div class="preview-bar">
         <h2 style="margin:0">Live Interactive Preview</h2>
-        <span class="toast" id="toast"></span>
+        <div class="vp-bar" role="group" aria-label="Preview device width">
+          <button type="button" class="ghost vp-btn" data-vp="100%" aria-pressed="true">🖥 Desktop</button>
+          <button type="button" class="ghost vp-btn" data-vp="768px" aria-pressed="false">📖 Tablet / Boox</button>
+          <button type="button" class="ghost vp-btn" data-vp="390px" aria-pressed="false">📱 Phone</button>
+          <button type="button" class="ghost" id="btn-open-tab" title="Open full-screen preview in a new tab">↗ Open</button>
+        </div>
       </div>
-      <iframe id="preview" title="Live worksheet preview"></iframe>
+      <div class="toast" id="toast" role="status" aria-live="polite" style="margin-bottom:0.45rem"></div>
+      <div class="preview-stage">
+        <iframe id="preview" title="Live worksheet preview"></iframe>
+      </div>
     </section>
   </main>
 
@@ -267,18 +285,35 @@ ${q.prompt ? `    <p>${escHtml(q.prompt)}</p>\n` : ""}    <pen-input ${attrs}>${
 ${sections}
 
   <pen-submit${submitAttrs ? " " + submitAttrs : ""}>Hand in for coaching</pen-submit>
-  <script src="${scriptSrc}"></script>
+  <script src="${scriptSrc}"><\/script>
 </body>
 </html>
 `;
     }
 
+    const DRAFT_KEY = "pen-sheet:studio-draft:v1";
+    function updateStats() {
+      const el = document.getElementById("q-stats");
+      if (!el) return;
+      const pts = questions.reduce((s, q) => s + (Number(q.points) || 0), 0);
+      const timer = Number(document.getElementById("w-timer").value) || 0;
+      const parts = [`${questions.length} Q`, pts ? `${pts} pts` : ""];
+      if (timer > 0 && questions.length) parts.push(`~${Math.max(1, Math.round(timer / questions.length))}m/Q`);
+      el.textContent = parts.filter(Boolean).join(" · ");
+    }
+    function saveDraft() {
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(currentSpec())); } catch {}
+    }
     let previewTimer = null;
     function schedulePreview() {
+      updateStats();
+      saveDraft();
       clearTimeout(previewTimer);
       previewTimer = setTimeout(() => {
-        const localRuntime = new URL("../dist/pen-sheet.js", location.href).href;
-        document.getElementById("preview").srcdoc = buildHtml(localRuntime);
+        const runtimeSrc = location.protocol === "http:" || location.protocol === "https:"
+          ? new URL("../dist/pen-sheet.js", location.href).href
+          : CDN;
+        document.getElementById("preview").srcdoc = buildHtml(runtimeSrc);
       }, 120);
     }
 
@@ -286,15 +321,18 @@ ${sections}
       const list = document.getElementById("q-list");
       list.innerHTML = "";
       questions.forEach((q, idx) => {
+        const hasCustomSvg = Boolean(q.customSvg && q.customSvg.trim().startsWith("<svg"));
+        const svgMode = hasCustomSvg ? "custom" : q.svg || "none";
         const card = document.createElement("div");
         card.className = "q-card";
         card.innerHTML = `
           <div class="q-head">
             <strong>Question ${idx + 1} (<code>q${idx + 1}</code>)</strong>
             <div class="q-btns">
-              <button type="button" class="ghost" data-act="up" ${idx === 0 ? "disabled" : ""}>↑</button>
-              <button type="button" class="ghost" data-act="down" ${idx === questions.length - 1 ? "disabled" : ""}>↓</button>
-              <button type="button" class="ghost" data-act="del" ${questions.length <= 1 ? "disabled" : ""}>✕</button>
+              <button type="button" class="ghost" data-act="dup" title="Duplicate question">⧉</button>
+              <button type="button" class="ghost" data-act="up" title="Move up" ${idx === 0 ? "disabled" : ""}>↑</button>
+              <button type="button" class="ghost" data-act="down" title="Move down" ${idx === questions.length - 1 ? "disabled" : ""}>↓</button>
+              <button type="button" class="ghost" data-act="del" title="Remove question" ${questions.length <= 1 ? "disabled" : ""}>✕</button>
             </div>
           </div>
           <div class="grid2">
@@ -311,11 +349,14 @@ ${sections}
               </select>
             </label>
             <label>Starter SVG Diagram
-              <select data-k="svg">${Object.entries(SVG_TEMPLATES).map(([k, v]) => `<option value="${k}" ${q.svg === k ? "selected" : ""}>${v.name}</option>`).join("")}</select>
+              <select data-k="svg">${Object.entries(SVG_TEMPLATES).map(([k, v]) => `<option value="${k}" ${svgMode === k ? "selected" : ""}>${v.name}</option>`).join("")}<option value="custom" ${svgMode === "custom" ? "selected" : ""}>Custom inline SVG…</option></select>
             </label>
             <label>Points <input type="number" data-k="points" min="0" max="100" value="${q.points}"></label>
             <label>Pad height <input type="number" data-k="height" min="200" max="900" step="20" value="${q.height}"></label>
           </div>
+          <label class="custom-svg-row" ${svgMode === "custom" ? "" : "hidden"}>Custom inline SVG (<code>&lt;svg viewBox="..."&gt;...&lt;/svg&gt;</code>)
+            <textarea data-k="customSvg" style="font-family:ui-monospace,monospace;font-size:0.8rem" placeholder="<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 400 200&quot;>...</svg>">${escHtml(q.customSvg || "")}</textarea>
+          </label>
           <label>Rubric checklist (separate with |) <input type="text" data-k="rubric" value="${escAttr(q.rubric)}" placeholder="Step 1 | Step 2 | Final check"></label>
           <div class="grid2">
             <label>Offline Hint (optional) <input type="text" data-k="hint" value="${escAttr(q.hint)}" placeholder="Leave blank for closed-book exams"></label>
@@ -323,16 +364,26 @@ ${sections}
           </div>
           <label>Audio Dictation phrase (optional — adds 🔊 Listen button without showing text) <input type="text" data-k="say" value="${escAttr(q.say || "")}" placeholder="e.g. Gestern bin ich in den Park gegangen."></label>
         `;
+        const customRow = card.querySelector(".custom-svg-row");
         card.querySelectorAll("[data-k]").forEach((el) => {
-          el.addEventListener("input", () => {
+          const onEdit = () => {
             const k = el.dataset.k;
-            questions[idx][k] = el.type === "number" ? Number(el.value) : el.value;
+            if (k === "svg") {
+              questions[idx].svg = el.value === "custom" ? "none" : el.value;
+              if (el.value !== "custom") questions[idx].customSvg = "";
+              customRow.hidden = el.value !== "custom";
+            } else {
+              questions[idx][k] = el.type === "number" ? Number(el.value) : el.value;
+            }
             schedulePreview();
-          });
+          };
+          el.addEventListener("input", onEdit);
+          el.addEventListener("change", onEdit);
         });
         card.querySelectorAll("[data-act]").forEach((btn) => {
           btn.addEventListener("click", () => {
             const act = btn.dataset.act;
+            if (act === "dup") questions.splice(idx + 1, 0, { ...questions[idx], heading: `${idx + 2}. ${String(questions[idx].heading || "").replace(/^\d+\.\s*/, "")}` });
             if (act === "up" && idx > 0) [questions[idx - 1], questions[idx]] = [questions[idx], questions[idx - 1]];
             if (act === "down" && idx < questions.length - 1) [questions[idx + 1], questions[idx]] = [questions[idx], questions[idx + 1]];
             if (act === "del" && questions.length > 1) questions.splice(idx, 1);
@@ -613,6 +664,36 @@ ${sections}
       await navigator.clipboard.writeText(prompt);
       showToast("✓ AI authoring prompt copied!");
     };
+
+    document.querySelectorAll(".vp-btn").forEach((btn) => {
+      btn.onclick = () => {
+        document.querySelectorAll(".vp-btn").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+        document.getElementById("preview").style.width = btn.dataset.vp;
+      };
+    });
+    document.getElementById("btn-open-tab").onclick = async () => {
+      const hash = await encodeShareHash(currentSpec());
+      window.open(new URL(`./play.html${hash}`, location.href).href, "_blank", "noopener");
+    };
+    try {
+      const saved = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+      if (saved && Array.isArray(saved.questions) && saved.questions.length) {
+        document.getElementById("w-title").value = saved.title || "";
+        document.getElementById("w-sub").value = saved.sub || "";
+        document.getElementById("w-timer").value = String(saved.timer || 0);
+        document.getElementById("w-mode").value = saved.mode || "coach";
+        document.getElementById("w-lang").value = saved.lang || "en";
+        document.getElementById("w-fblang").value = saved.fblang || "";
+        document.getElementById("w-eink").checked = saved.eink !== false;
+        document.getElementById("w-name").checked = Boolean(saved.name);
+        document.getElementById("w-conf").checked = Boolean(saved.conf);
+        document.getElementById("w-aihints").checked = Boolean(saved.aiHints);
+        document.getElementById("w-exam").checked = Boolean(saved.exam);
+        document.getElementById("w-prompt").value = saved.prompt || "";
+        document.getElementById("w-ref").value = saved.ref || "";
+        questions = saved.questions;
+      }
+    } catch {}
 
     renderQuestions();
     schedulePreview();
