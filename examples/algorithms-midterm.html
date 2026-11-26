@@ -15,6 +15,15 @@
 <body>
   <pen-toolbar timer="25"></pen-toolbar>
   <pen-header subtitle="Closed-book mock exam · Show trees, recurrence work, and edge cases clearly." student-name></pen-header>
+  <pen-reference title="Formula Sheet">
+    <p><strong>Master Theorem</strong> for <code>T(n) = aT(n/b) + f(n)</code> (<code>a ≥ 1, b &gt; 1</code>):</p>
+    <ul>
+      <li>If <code>f(n) = O(n^(log_b a − ε))</code> → <code>T(n) = Θ(n^(log_b a))</code></li>
+      <li>If <code>f(n) = Θ(n^(log_b a) · log^k n)</code> → <code>T(n) = Θ(n^(log_b a) · log^(k+1) n)</code></li>
+      <li>If <code>f(n) = Ω(n^(log_b a + ε))</code> (regularity) → <code>T(n) = Θ(f(n))</code></li>
+    </ul>
+    <p><strong>Common Sums:</strong> <code>∑(i=1..n) i = n(n+1)/2</code> · <code>∑(i=0..k) 2^i = 2^(k+1) − 1</code></p>
+  </pen-reference>
 
   <section>
     <h2>1. Trace Merge Sort on [7, 2, 9, 4, 1]</h2>

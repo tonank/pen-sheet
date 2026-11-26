@@ -90,6 +90,9 @@
       <label>Custom AI Coaching Instructions (optional)
         <input type="text" id="w-prompt" placeholder="e.g. Give a Socratic question first before revealing the worked solution.">
       </label>
+      <label style="margin-top:0.55rem">Formula / Reference Sheet (optional — accessible on every question via 📐 button, Markdown + $math$)
+        <textarea id="w-ref" placeholder="e.g. - **Chain rule:** $(f(g(x)))' = f'(g(x))g'(x)$&#10;- **Quadratic formula:** $x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$"></textarea>
+      </label>
 
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.1rem">
         <h2 style="margin:0">2. Questions</h2>
@@ -200,15 +203,17 @@
       const aiHints = document.getElementById("w-aihints").checked;
       const closedBook = document.getElementById("w-closedbook").checked;
       const customPrompt = document.getElementById("w-prompt").value.trim();
+      const refSheet = document.getElementById("w-ref").value.trim();
 
       const htmlAttrs = [`lang="${escAttr(lang)}"`, fblang ? `data-feedback-lang="${escAttr(fblang)}"` : "", eink ? 'class="hwq-eink"' : ""].filter(Boolean).join(" ");
       const toolbarTag = timer > 0 ? `<pen-toolbar timer="${timer}"></pen-toolbar>` : "<pen-toolbar></pen-toolbar>";
       const headerTag = `<pen-header${sub ? ` subtitle="${escAttr(sub)}"` : ""}${askName ? " student-name" : ""}></pen-header>`;
+      const refTag = refSheet ? `\n  <pen-reference title="Formula Sheet">${escHtml(refSheet)}</pen-reference>` : "";
       const submitAttrs = [mode !== "coach" ? `mode="${escAttr(mode)}"` : "", aiHints ? "ai-hints" : "", customPrompt ? `prompt="${escAttr(customPrompt)}"` : ""].filter(Boolean).join(" ");
 
       const sections = questions.map((q, idx) => {
         const id = `q${idx + 1}`;
-        const svg = SVG_TEMPLATES[q.svg]?.svg || "";
+        const svg = SVG_TEMPLATES[q.svg]?.svg || (q.customSvg?.trim().startsWith("<svg") ? q.customSvg.trim() : "");
         const attrs = [
           `name="${id}"`,
           q.label ? `label="${escAttr(q.label)}"` : "",
@@ -242,7 +247,7 @@ ${q.prompt ? `    <p>${escHtml(q.prompt)}</p>\n` : ""}    <pen-input ${attrs}>${
 </head>
 <body>
   ${toolbarTag}
-  ${headerTag}
+  ${headerTag}${refTag}
 
 ${sections}
 
@@ -330,7 +335,7 @@ ${sections}
       setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 3000);
     };
 
-    document.querySelectorAll("#w-title,#w-sub,#w-timer,#w-mode,#w-lang,#w-fblang,#w-eink,#w-name,#w-conf,#w-aihints,#w-closedbook,#w-prompt").forEach((el) => {
+    document.querySelectorAll("#w-title,#w-sub,#w-timer,#w-mode,#w-lang,#w-fblang,#w-eink,#w-name,#w-conf,#w-aihints,#w-closedbook,#w-prompt,#w-ref").forEach((el) => {
       el.addEventListener("input", schedulePreview);
       el.addEventListener("change", schedulePreview);
     });
@@ -423,6 +428,7 @@ ${sections}
         name: document.getElementById("w-name").checked,
         conf: document.getElementById("w-conf").checked,
         prompt: document.getElementById("w-prompt").value.trim(),
+        ref: document.getElementById("w-ref").value.trim(),
         questions: questions.map((q) => ({ ...q, ...(closedBook ? { hint: "", solution: "" } : {}) })),
       };
     }
@@ -469,11 +475,15 @@ ${sections}
       const sub = doc.querySelector("pen-submit");
       document.getElementById("w-mode").value = sub?.getAttribute("mode") || "coach";
       document.getElementById("w-prompt").value = sub?.getAttribute("prompt") || "";
+      document.getElementById("w-aihints").checked = Boolean(sub?.hasAttribute("ai-hints"));
+      const refEl = doc.querySelector("pen-reference");
+      document.getElementById("w-ref").value = refEl?.textContent?.trim() || "";
       const pens = [...doc.querySelectorAll("pen-input")];
       if (pens.length) {
         document.getElementById("w-conf").checked = pens.some((p) => p.hasAttribute("confidence"));
         questions = pens.map((p, idx) => {
           const sec = p.closest("section");
+          const inlineSvg = p.querySelector("svg")?.outerHTML || "";
           return {
             heading: sec?.querySelector("h2,h3")?.textContent?.trim() || `${idx + 1}. ${p.getAttribute("label") || p.getAttribute("name") || "Question"}`,
             prompt: sec?.querySelector("p")?.textContent?.trim() || "",
@@ -484,7 +494,9 @@ ${sections}
             rubric: p.getAttribute("rubric") || "",
             hint: p.getAttribute("hint") || "",
             solution: p.getAttribute("solution") || "",
+            say: p.getAttribute("say") || "",
             svg: "none",
+            customSvg: inlineSvg,
           };
         });
       }

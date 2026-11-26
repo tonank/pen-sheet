@@ -37,6 +37,22 @@
       return null;
     }
 
+    function sanitizeSvg(raw) {
+      if (typeof raw !== "string" || !raw.trim().startsWith("<svg")) return null;
+      const doc = new DOMParser().parseFromString(raw, "image/svg+xml");
+      if (doc.querySelector("parsererror")) return null;
+      const svg = doc.documentElement;
+      if (svg.localName !== "svg") return null;
+      svg.querySelectorAll("script, foreignObject, iframe, object, embed").forEach((el) => el.remove());
+      for (const el of [svg, ...svg.querySelectorAll("*")]) {
+        for (const attr of [...el.attributes]) {
+          const name = attr.name.toLowerCase();
+          if (name.startsWith("on") || /^\s*javascript:/i.test(attr.value)) el.removeAttribute(attr.name);
+        }
+      }
+      return svg.outerHTML;
+    }
+
     async function boot() {
       const root = document.getElementById("root");
       let spec;
@@ -64,6 +80,12 @@
 
       const frag = document.createDocumentFragment();
       frag.append(toolbar, header);
+      if (spec.ref && String(spec.ref).trim()) {
+        const refEl = document.createElement("pen-reference");
+        refEl.setAttribute("title", "Formula Sheet");
+        refEl.textContent = String(spec.ref).trim();
+        frag.append(refEl);
+      }
 
       spec.questions.forEach((q, idx) => {
         const sec = document.createElement("section");
@@ -84,7 +106,7 @@
         if (q.solution) pen.setAttribute("solution", String(q.solution));
         if (q.say) pen.setAttribute("say", String(q.say));
         if (spec.conf) pen.setAttribute("confidence", "");
-        const svg = SVG_TEMPLATES[q.svg];
+        const svg = SVG_TEMPLATES[q.svg] || (q.customSvg ? sanitizeSvg(q.customSvg) : null);
         if (svg) {
           pen.innerHTML = svg;
         } else {
