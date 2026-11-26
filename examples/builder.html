@@ -46,8 +46,16 @@
     </div>
     <div class="top-actions">
       <a class="btn ghost" href="../index.html">← Live Demo</a>
+      <select id="sel-preset" class="btn ghost" aria-label="Load starter template" style="font-weight:500">
+        <option value="">✨ Load Template…</option>
+        <option value="linalg">Linear Algebra Checkpoint</option>
+        <option value="algos">Algorithms Midterm (25 min)</option>
+        <option value="calc">Calculus &amp; Physics Practice</option>
+        <option value="german">German Dictation &amp; Writing</option>
+      </select>
       <button type="button" class="ghost" id="btn-import">📂 Import .html</button>
       <input type="file" id="file-import" accept=".html,text/html" hidden>
+      <button type="button" class="ghost" id="btn-key">🗝 Answer Key (.md)</button>
       <button type="button" class="ghost" id="btn-share">🔗 Share Link</button>
       <button type="button" class="ghost" id="btn-ai">🤖 Copy AI Prompt</button>
       <button type="button" class="ghost" id="btn-copy">📋 Copy HTML</button>
@@ -75,7 +83,9 @@
       <div class="checks">
         <label class="inline"><input type="checkbox" id="w-eink" checked> E-ink default (<code>hwq-eink</code>)</label>
         <label class="inline"><input type="checkbox" id="w-name" checked> Student Name field</label>
-        <label class="inline"><input type="checkbox" id="w-conf" checked> Confidence chips (Guess/Unsure/Sure)</label>
+        <label class="inline"><input type="checkbox" id="w-conf" checked> Confidence chips</label>
+        <label class="inline"><input type="checkbox" id="w-aihints"> Live AI nudges (<code>ai-hints</code>)</label>
+        <label class="inline"><input type="checkbox" id="w-closedbook"> Closed-book export (strip solutions from student copy)</label>
       </div>
       <label>Custom AI Coaching Instructions (optional)
         <input type="text" id="w-prompt" placeholder="e.g. Give a Socratic question first before revealing the worked solution.">
@@ -187,12 +197,14 @@
       const eink = document.getElementById("w-eink").checked;
       const askName = document.getElementById("w-name").checked;
       const conf = document.getElementById("w-conf").checked;
+      const aiHints = document.getElementById("w-aihints").checked;
+      const closedBook = document.getElementById("w-closedbook").checked;
       const customPrompt = document.getElementById("w-prompt").value.trim();
 
       const htmlAttrs = [`lang="${escAttr(lang)}"`, fblang ? `data-feedback-lang="${escAttr(fblang)}"` : "", eink ? 'class="hwq-eink"' : ""].filter(Boolean).join(" ");
       const toolbarTag = timer > 0 ? `<pen-toolbar timer="${timer}"></pen-toolbar>` : "<pen-toolbar></pen-toolbar>";
       const headerTag = `<pen-header${sub ? ` subtitle="${escAttr(sub)}"` : ""}${askName ? " student-name" : ""}></pen-header>`;
-      const submitAttrs = [mode !== "coach" ? `mode="${escAttr(mode)}"` : "", customPrompt ? `prompt="${escAttr(customPrompt)}"` : ""].filter(Boolean).join(" ");
+      const submitAttrs = [mode !== "coach" ? `mode="${escAttr(mode)}"` : "", aiHints ? "ai-hints" : "", customPrompt ? `prompt="${escAttr(customPrompt)}"` : ""].filter(Boolean).join(" ");
 
       const sections = questions.map((q, idx) => {
         const id = `q${idx + 1}`;
@@ -202,8 +214,9 @@
           q.label ? `label="${escAttr(q.label)}"` : "",
           q.points > 0 ? `points="${q.points}"` : "",
           q.rubric ? `rubric="${escAttr(q.rubric)}"` : "",
-          q.hint ? `hint="${escAttr(q.hint)}"` : "",
-          q.solution ? `solution="${escAttr(q.solution)}"` : "",
+          q.hint && !closedBook ? `hint="${escAttr(q.hint)}"` : "",
+          q.solution && !closedBook ? `solution="${escAttr(q.solution)}"` : "",
+          q.say ? `say="${escAttr(q.say)}"` : "",
           !svg ? `paper="${escAttr(q.paper)}"` : "",
           !svg ? `height="${Number(q.height) || 400}"` : "",
           conf ? "confidence" : "",
@@ -286,8 +299,9 @@ ${sections}
           <label>Rubric checklist (separate with |) <input type="text" data-k="rubric" value="${escAttr(q.rubric)}" placeholder="Step 1 | Step 2 | Final check"></label>
           <div class="grid2">
             <label>Offline Hint (optional) <input type="text" data-k="hint" value="${escAttr(q.hint)}" placeholder="Leave blank for closed-book exams"></label>
-            <label>Self-check Solution (optional, self-study only) <input type="text" data-k="solution" value="${escAttr(q.solution)}" placeholder="Reveals 'Check my answer' toggle"></label>
+            <label>Solution / Answer Key (for self-check or Teacher Key) <input type="text" data-k="solution" value="${escAttr(q.solution)}" placeholder="Stripped when Closed-book is checked"></label>
           </div>
+          <label>Audio Dictation phrase (optional — adds 🔊 Listen button without showing text) <input type="text" data-k="say" value="${escAttr(q.say || "")}" placeholder="e.g. Gestern bin ich in den Park gegangen."></label>
         `;
         card.querySelectorAll("[data-k]").forEach((el) => {
           el.addEventListener("input", () => {
@@ -316,10 +330,79 @@ ${sections}
       setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 3000);
     };
 
-    document.querySelectorAll("#w-title,#w-sub,#w-timer,#w-mode,#w-lang,#w-fblang,#w-eink,#w-name,#w-conf,#w-prompt").forEach((el) => {
+    document.querySelectorAll("#w-title,#w-sub,#w-timer,#w-mode,#w-lang,#w-fblang,#w-eink,#w-name,#w-conf,#w-aihints,#w-closedbook,#w-prompt").forEach((el) => {
       el.addEventListener("input", schedulePreview);
       el.addEventListener("change", schedulePreview);
     });
+    const PRESETS = {
+      linalg: {
+        title: "Linear Algebra Checkpoint", sub: "Show every step clearly; check determinants and intercepts.", timer: 20, mode: "coach", lang: "en", fblang: "", eink: true, name: true, conf: true, closedBook: false,
+        questions: [
+          { heading: "1. Compute the determinant and check invertibility", prompt: "Given A = [[3, 2], [1, 4]], compute det(A) and state whether A⁻¹ exists.", label: "Determinant & invertibility", paper: "grid", height: 380, points: 4, rubric: "Apply ad - bc | Compute det(A) = 10 | Conclude invertible", hint: "For a 2×2 matrix, $\\det(A) = ad - bc$.", solution: "$\\det(A) = 3(4) - 2(1) = 10 \\neq 0$, so $A$ is invertible.", say: "", svg: "none" },
+          { heading: "2. Sketch y = 2x − 1 on the axes", prompt: "Mark both intercepts clearly and draw the line through them.", label: "Graph y = 2x - 1", paper: "blank", height: 360, points: 3, rubric: "Plot y-intercept (0, -1) | Plot x-intercept (0.5, 0) | Draw straight line", hint: "Set $x = 0$ for the y-intercept and $y = 0$ for the x-intercept.", solution: "Line passes through $(0, -1)$ and $(0.5, 0)$ with slope $2$.", say: "", svg: "axes" },
+        ],
+      },
+      algos: {
+        title: "Algorithms Midterm Practice", sub: "Closed-book mock exam · Draw recursion trees and justify bounds.", timer: 25, mode: "coach", lang: "en", fblang: "", eink: true, name: true, conf: true, closedBook: true,
+        questions: [
+          { heading: "1. Trace Merge Sort on [7, 2, 9, 4, 1]", prompt: "Draw the split-and-merge tree and justify the worst-case runtime.", label: "Merge Sort trace", paper: "grid", height: 460, points: 5, rubric: "Complete split/merge tree | Count log₂ n levels | Show O(n) work per level", hint: "", solution: "Tree has $\\lceil \\log_2 n \\rceil$ levels with $O(n)$ merge work per level -> $O(n \\log n)$.", say: "", svg: "none" },
+          { heading: "2. Coin Change DP Table — Coins {1, 3, 4}", prompt: "Fill minimum coins dp[s] for s = 0..5 in the table.", label: "Coin Change DP table", paper: "blank", height: 340, points: 5, rubric: "Base case dp[0]=0 | Recurrence dp[s]=1+min(dp[s-c]) | Accurate entries", hint: "", solution: "$dp = [0, 1, 2, 1, 1, 2]$ (and at $s=6$, optimal is $3+3=2$ coins, beating greedy $4+1+1$).", say: "", svg: "table" },
+        ],
+      },
+      calc: {
+        title: "Calculus & Mechanics Drill", sub: "Guided practice · Show every differentiation step and unit.", timer: 0, mode: "coach", lang: "en", fblang: "", eink: true, name: true, conf: true, closedBook: false,
+        questions: [
+          { heading: "1. Differentiate f(x) = ln(3x² + 5)", prompt: "Apply the chain rule and simplify your derivative.", label: "Chain rule derivative", paper: "grid", height: 380, points: 4, rubric: "Identify inner u=3x²+5 | Multiply by u'=6x | Simplify fraction", hint: "Let $u = 3x^2 + 5$, then $(\\ln u)' = u'/u$.", solution: "$f'(x) = \\frac{6x}{3x^2 + 5}$.", say: "", svg: "none" },
+          { heading: "2. Spot the mistake: ∫ (1/x²) dx = ln(x²) + C", prompt: "Differentiate the classmate's answer to show why it fails, then solve properly.", label: "Integration flaw", paper: "grid", height: 380, points: 4, rubric: "Differentiate ln(x²) -> 2/x | Rewrite 1/x² as x⁻² | Integrate to -1/x + C", hint: "Only $x^{-1}$ integrates to $\\ln|x|$; every other power uses the power rule.", solution: "$\\int x^{-2}\\,dx = -x^{-1} + C = -\\frac{1}{x} + C$.", say: "", svg: "none" },
+        ],
+      },
+      german: {
+        title: "Deutsch A2/B1 — Hören & Schreiben", sub: "Listen to the dictation, then write naturally in German (coaching in English).", timer: 15, mode: "coach", lang: "de", fblang: "en", eink: true, name: true, conf: true, closedBook: false,
+        questions: [
+          { heading: "1. Diktat — Hör zu und schreib den Satz auf", prompt: "Tap Listen above the box and write what you hear with exact capitals and punctuation.", label: "German dictation", paper: "ruled", height: 300, points: 4, rubric: "Correct word order | Noun capitalization (Park, Buch) | Correct Perfekt auxiliary", hint: "Remember: all German nouns start with a capital letter.", solution: "Gestern bin ich in den Park gegangen und habe ein Buch gelesen.", say: "Gestern bin ich in den Park gegangen und habe ein Buch gelesen.", svg: "none" },
+          { heading: "2. Schreib 3 Sätze mit 'weil'", prompt: "Explain what you did last weekend and why.", label: "Weekend reflection", paper: "ruled", height: 420, points: 6, rubric: "At least 3 sentences | Verb at end of 'weil' clause | Accurate Perfekt forms", hint: "Example: Ich bin zu Hause geblieben, weil es geregnet hat.", solution: "", say: "", svg: "none" },
+        ],
+      },
+    };
+    document.getElementById("sel-preset").onchange = (e) => {
+      const p = PRESETS[e.target.value];
+      e.target.value = "";
+      if (!p) return;
+      document.getElementById("w-title").value = p.title;
+      document.getElementById("w-sub").value = p.sub;
+      document.getElementById("w-timer").value = String(p.timer);
+      document.getElementById("w-mode").value = p.mode;
+      document.getElementById("w-lang").value = p.lang;
+      document.getElementById("w-fblang").value = p.fblang;
+      document.getElementById("w-eink").checked = p.eink;
+      document.getElementById("w-name").checked = p.name;
+      document.getElementById("w-conf").checked = p.conf;
+      document.getElementById("w-closedbook").checked = Boolean(p.closedBook);
+      questions = p.questions.map((q) => ({ ...q }));
+      renderQuestions();
+      schedulePreview();
+      showToast(`✓ Loaded "${p.title}" template`);
+    };
+    document.getElementById("btn-key").onclick = () => {
+      const title = document.getElementById("w-title").value.trim() || "Worksheet";
+      const totalPts = questions.reduce((s, q) => s + (Number(q.points) || 0), 0);
+      const lines = [`# ${title} — Teacher Answer Key & Rubric`, totalPts ? `Total Points: **${totalPts}**` : "", ""];
+      questions.forEach((q, idx) => {
+        lines.push(`## ${q.heading || `${idx + 1}. Question`}${q.points ? ` (${q.points} pts)` : ""}`);
+        if (q.prompt) lines.push(q.prompt);
+        if (q.say) lines.push(`- **Dictation script:** ${q.say}`);
+        if (q.rubric) lines.push(`- **Rubric:** ${q.rubric}`);
+        if (q.hint) lines.push(`- **Hint:** ${q.hint}`);
+        if (q.solution) lines.push(`- **Model Solution:** ${q.solution}`);
+        lines.push("");
+      });
+      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "worksheet";
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([lines.join("\n").trim() + "\n"], { type: "text/markdown;charset=utf-8" }));
+      a.download = `${slug}-answer-key.md`;
+      a.click();
+      showToast(`✓ Exported ${slug}-answer-key.md`);
+    };
     document.getElementById("btn-add").onclick = () => {
       const n = questions.length + 1;
       questions.push({ heading: `${n}. New question`, prompt: "", label: `Question ${n}`, paper: "ruled", height: 360, points: 2, rubric: "", hint: "", solution: "", svg: "none" });
@@ -328,6 +411,7 @@ ${sections}
     };
     const CDN = "https://cdn.jsdelivr.net/gh/tonank/pen-sheet@main/dist/pen-sheet.js";
     function currentSpec() {
+      const closedBook = document.getElementById("w-closedbook").checked;
       return {
         title: document.getElementById("w-title").value.trim() || "Stylus Worksheet",
         sub: document.getElementById("w-sub").value.trim(),
@@ -339,7 +423,7 @@ ${sections}
         name: document.getElementById("w-name").checked,
         conf: document.getElementById("w-conf").checked,
         prompt: document.getElementById("w-prompt").value.trim(),
-        questions: questions.map((q) => ({ ...q })),
+        questions: questions.map((q) => ({ ...q, ...(closedBook ? { hint: "", solution: "" } : {}) })),
       };
     }
     function toBase64Url(bytes) {

@@ -102,6 +102,7 @@ export interface PenSheetAPI {
   attempts(): AttemptRecord[];
   toggleFocus(on?: boolean): boolean;
   openScratchpad(): void;
+  openManualReview(): void;
   exportState(): Record<string, unknown>;
   importState(input: string | Record<string, unknown>): boolean;
   downloadBackup(): void;

@@ -30,6 +30,14 @@ Typing math, proofs, diagrams, and language drills into chat boxes hides how a l
 
 ---
 
+## Designed from Three Perspectives
+
+| Perspective | Built-In Superpowers |
+|---|---|
+| **✍️ Taking an Exam** | Pressure-sensitive ink + palm rejection + scribble-to-erase; **🎯 Focus mode** (1 question at a time, zero e-ink scroll ghosting); private **📝 Scratchpad**; **⚑ Flag for review** & live Question Navigator; auto-starting exam timer with calm time-up banner; **Aa Easy read** & **🔊 Listen** dictation; optional **💡 Ask tutor for a nudge** (`ai-hint`) and `Guess / Unsure / Sure` confidence chips. |
+| **📝 Preparing a Test** | Zero-boilerplate `<pen-header>` cover strip; `points`, `rubric`, `hint`, `solution`, `say`, and drawable inline `<svg>` diagrams; **[No-Code Worksheet Studio](https://tonank.github.io/pen-sheet/examples/builder.html)** with preset templates, closed-book student copy + **🗝 Teacher Answer Key (`.md`)** export, HTML import, and **1-click zero-backend `🔗 Share Link`** HTTPS URLs. |
+| **🔎 Reviewing Later** | Semantic Review Bar (`Score · % · Time · 📈 Attempt Progression · ⚠ Confident mistakes`); `All / Needs work / ⚑ Flagged` filters + **👁 Hide/Show red-pen marks**; **🖍 Teacher manual review** drawer (grade `.pen.json` files offline without AI); **↻ Retry missed** & **🧹 Fresh retake** (keeps history); per-question **💭 My takeaway** notes; **📝 Markdown Study Notes**, **⚡ Practice weak spots** drill prompt, and **💾 `.pen.json`** portable archive. |
+
 ## Quick start (CDN — 10 lines of HTML)
 
 ```html
