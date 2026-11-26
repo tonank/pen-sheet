@@ -95,6 +95,7 @@ export interface PenSheetAPI {
   canGrade(): boolean;
   handIn(): Promise<GradeResult | null>;
   reopen(): void;
+  freshRetake(): boolean;
   retryMissed(): void;
   studyNotes(): string;
   followUpPrompt(): string;

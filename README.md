@@ -5,7 +5,7 @@
 Zero-dependency **e-ink & stylus worksheet Web Components** (`<pen-toolbar>`, `<pen-input>`, `<pen-submit>`) engineered for **Onyx Boox**, **iPad + Apple Pencil**, **Surface**, and any browser — with **educational Socratic coaching**, progressive-disclosure hints & solutions, interactive follow-up Q&A, red-pen markup, native PDF/Notes round-trip, and cross-AI compatibility (**Claude, ChatGPT, Gemini, Codex**).
 
 👉 **Live HTTPS e-ink demos & Worksheet Studio (try on Onyx Boox, iPad, or desktop right now):**
-- **[✨ No-Code Worksheet Studio](https://tonank.github.io/pen-sheet/examples/builder.html)** — build & download a custom stylus exam (with starter SVG diagrams, rubrics, hints & timer) in 60 seconds
+- **[✨ No-Code Worksheet Studio](https://tonank.github.io/pen-sheet/examples/builder.html)** — build, import, download, or **1-click `🔗 Share Link`** (instant zero-backend HTTPS URL via [play.html](https://tonank.github.io/pen-sheet/examples/play.html)) a custom stylus exam in 60 seconds
 - **[Interactive Stylus Showcase](https://tonank.github.io/pen-sheet/)** — algebra, explanation, number-line SVG, rubrics, hints, confidence calibration, Focus mode, private Scratchpad & `.pen.json` backup
 - **[Algorithms & Recurrences Midterm](https://tonank.github.io/pen-sheet/examples/algorithms-midterm.html)** — 25-min timed mock exam with Merge Sort tree, Coin Change DP table SVG & binary search bug hunt
 - **[Calculus & Mechanics Practice](https://tonank.github.io/pen-sheet/examples/calculus-physics.html)** — chain rule, inclined-plane Free-Body Diagram SVG & integration misconception

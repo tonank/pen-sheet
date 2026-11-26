@@ -46,6 +46,9 @@
     </div>
     <div class="top-actions">
       <a class="btn ghost" href="../index.html">← Live Demo</a>
+      <button type="button" class="ghost" id="btn-import">📂 Import .html</button>
+      <input type="file" id="file-import" accept=".html,text/html" hidden>
+      <button type="button" class="ghost" id="btn-share">🔗 Share Link</button>
       <button type="button" class="ghost" id="btn-ai">🤖 Copy AI Prompt</button>
       <button type="button" class="ghost" id="btn-copy">📋 Copy HTML</button>
       <button type="button" class="primary" id="btn-download">⬇ Download .html</button>
@@ -324,6 +327,87 @@ ${sections}
       schedulePreview();
     };
     const CDN = "https://cdn.jsdelivr.net/gh/tonank/pen-sheet@main/dist/pen-sheet.js";
+    function currentSpec() {
+      return {
+        title: document.getElementById("w-title").value.trim() || "Stylus Worksheet",
+        sub: document.getElementById("w-sub").value.trim(),
+        timer: Number(document.getElementById("w-timer").value) || 0,
+        mode: document.getElementById("w-mode").value,
+        lang: document.getElementById("w-lang").value.trim() || "en",
+        fblang: document.getElementById("w-fblang").value.trim(),
+        eink: document.getElementById("w-eink").checked,
+        name: document.getElementById("w-name").checked,
+        conf: document.getElementById("w-conf").checked,
+        prompt: document.getElementById("w-prompt").value.trim(),
+        questions: questions.map((q) => ({ ...q })),
+      };
+    }
+    function toBase64Url(bytes) {
+      let bin = "";
+      for (const b of bytes) bin += String.fromCharCode(b);
+      return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+    }
+    async function encodeShareHash(spec) {
+      const jsonBytes = new TextEncoder().encode(JSON.stringify(spec));
+      if (typeof CompressionStream === "function") {
+        const cs = new CompressionStream("deflate-raw");
+        const stream = new Blob([jsonBytes]).stream().pipeThrough(cs);
+        const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
+        return `#z=${toBase64Url(compressed)}`;
+      }
+      return `#j=${toBase64Url(jsonBytes)}`;
+    }
+    document.getElementById("btn-share").onclick = async () => {
+      const hash = await encodeShareHash(currentSpec());
+      const url = new URL(`./play.html${hash}`, location.href).href;
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast(`✓ Shareable HTTPS link copied (${url.length} chars)!`);
+      } catch {
+        prompt("Copy your shareable worksheet link:", url);
+      }
+    };
+    document.getElementById("btn-import").onclick = () => document.getElementById("file-import").click();
+    document.getElementById("file-import").onchange = async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      const doc = new DOMParser().parseFromString(await file.text(), "text/html");
+      document.getElementById("w-title").value = doc.title || "Imported Worksheet";
+      const hdr = doc.querySelector("pen-header");
+      document.getElementById("w-sub").value = hdr?.getAttribute("subtitle") || "";
+      document.getElementById("w-name").checked = Boolean(hdr?.hasAttribute("student-name"));
+      const tb = doc.querySelector("pen-toolbar");
+      document.getElementById("w-timer").value = tb?.getAttribute("timer") || "0";
+      document.getElementById("w-lang").value = doc.documentElement.lang || "en";
+      document.getElementById("w-fblang").value = doc.documentElement.dataset.feedbackLang || "";
+      document.getElementById("w-eink").checked = doc.documentElement.classList.contains("hwq-eink");
+      const sub = doc.querySelector("pen-submit");
+      document.getElementById("w-mode").value = sub?.getAttribute("mode") || "coach";
+      document.getElementById("w-prompt").value = sub?.getAttribute("prompt") || "";
+      const pens = [...doc.querySelectorAll("pen-input")];
+      if (pens.length) {
+        document.getElementById("w-conf").checked = pens.some((p) => p.hasAttribute("confidence"));
+        questions = pens.map((p, idx) => {
+          const sec = p.closest("section");
+          return {
+            heading: sec?.querySelector("h2,h3")?.textContent?.trim() || `${idx + 1}. ${p.getAttribute("label") || p.getAttribute("name") || "Question"}`,
+            prompt: sec?.querySelector("p")?.textContent?.trim() || "",
+            label: p.getAttribute("label") || p.getAttribute("name") || `Question ${idx + 1}`,
+            paper: p.getAttribute("paper") || "ruled",
+            height: Number(p.getAttribute("height")) || 400,
+            points: Number(p.getAttribute("points")) || 0,
+            rubric: p.getAttribute("rubric") || "",
+            hint: p.getAttribute("hint") || "",
+            solution: p.getAttribute("solution") || "",
+            svg: "none",
+          };
+        });
+      }
+      renderQuestions();
+      schedulePreview();
+      showToast(`✓ Imported ${pens.length} question${pens.length === 1 ? "" : "s"} from ${file.name}`);
+    };
     document.getElementById("btn-copy").onclick = async () => {
       await navigator.clipboard.writeText(buildHtml(CDN));
       showToast("✓ Standalone HTML copied!");
