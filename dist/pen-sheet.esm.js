@@ -248,7 +248,7 @@ this.#clearHover();
 }
 setPaper(paper) {
 if (this.destroyed || this.figure) return;
-const next = paper === "grid" || paper === "blank" ? paper : "ruled";
+const next = paper === "grid" || paper === "dots" || paper === "blank" ? paper : "ruled";
 if (this.paper === next) return;
 this.el.classList.remove(`paper-${this.paper}`);
 this.paper = next;
@@ -365,7 +365,11 @@ ctx.save();
 ctx.setTransform(1, 0, 0, 1, 0, 0);
 ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 ctx.restore();
-for (const s of this.strokes) drawStroke(ctx, s, 0, true);
+const fast = Boolean(this.calm?.());
+for (const s of this.strokes) {
+if (fast && s.points.length > 1) drawFastBatch(ctx, s, 1);
+else drawStroke(ctx, s, 0, true);
+}
 }
 stopReplay() {
 clearTimeout(this.replayTimer);
@@ -1174,6 +1178,16 @@ ctx.stroke();
 function drawPaper(ctx, paper, x0, y0, x1, y1) {
 if (paper === "blank") return;
 ctx.save();
+if (paper === "dots") {
+ctx.fillStyle = "#cbd5e1";
+for (let y = Math.ceil(y0 / LINE_GAP) * LINE_GAP; y <= y1; y += LINE_GAP) {
+for (let x = Math.ceil(x0 / LINE_GAP) * LINE_GAP; x <= x1; x += LINE_GAP) {
+ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
+}
+}
+ctx.restore();
+return;
+}
 ctx.strokeStyle = paper === "grid" ? "#e2e8f0" : "#dbe4ee";
 ctx.lineWidth = 1;
 ctx.beginPath();
@@ -2331,6 +2345,7 @@ function pageRequest({ title, pageText, items, lang, feedbackLang, dispute = nul
 const hasPoints = items.some(({ q }) => q?.showPoints || (Number(q?.points) > 1));
 const hasRubric = items.some(({ q }) => Array.isArray(q?.rubric) && q.rubric.length > 0);
 const hasConfidence = items.some((it) => Boolean(it.confidence));
+const hasSelfRubric = items.some((it) => Array.isArray(it.selfRubric) && it.selfRubric.length > 0);
 return [
 {
 type: "text",
@@ -2341,16 +2356,20 @@ text: [
 ...(hasConfidence
 ? ["Where the student rated their confidence (guess / unsure / sure), be especially clear and kind about confident mistakes (the highest-value learning moments) and briefly confirm why right guesses worked."]
 : []),
+...(hasSelfRubric
+? ["Where the student self-ticked rubric criteria before handing in, briefly note when their self-check matched their actual work or where a ticked step was still missing."]
+: []),
 common(lang, feedbackLang),
 ...(dispute
 ? [`The student says you misread their handwriting in this field. In their words, they wrote: ${quote(dispute)}. Re-read the image. If their reading plausibly matches what is written, assess that; if not, assess what you see and explain kindly what you read.`]
 : []),
 ].join("\n\n"),
 },
-...items.flatMap(({ q, label, typed, confidence, inks = [] }) => {
+...items.flatMap(({ q, label, typed, confidence, selfRubric, inks = [] }) => {
 const pts = hasPoints && Number(q?.points) > 0 ? ` — ${q.points} pt${q.points === 1 ? "" : "s"}` : "";
+const ticked = new Set(Array.isArray(selfRubric) ? selfRubric.map(Number) : []);
 const rubricLines = Array.isArray(q?.rubric) && q.rubric.length
-? `\nRubric criteria (shown to student):\n${q.rubric.map((c, k) => `  ${k + 1}. ${c}`).join("\n")}`
+? `\nRubric criteria (shown to student):\n${q.rubric.map((c, k) => `  ${k + 1}. ${ticked.has(k + 1) ? "[student self-ticked ✓] " : ""}${c}`).join("\n")}`
 : "";
 const confLine = confidence ? `\nStudent's confidence: ${confidence}` : "";
 return [
@@ -2876,7 +2895,14 @@ ctx.fillStyle = "#ffffff";
 ctx.fillRect(x, y, w, h);
 ctx.strokeStyle = "#b8bec8";
 ctx.lineWidth = 1;
-if (paper === "ruled" || paper === "grid") {
+if (paper === "dots") {
+ctx.fillStyle = "#94a3b8";
+for (let gy = y + LINE_STEP; gy < y + h - 4; gy += LINE_STEP) {
+for (let gx = x + LINE_STEP; gx < x + w - 4; gx += LINE_STEP) {
+ctx.fillRect(gx - 1.5, gy - 1.5, 3, 3);
+}
+}
+} else if (paper === "ruled" || paper === "grid") {
 ctx.beginPath();
 for (let gy = y + LINE_STEP; gy < y + h - 4; gy += LINE_STEP) {
 ctx.moveTo(x + 1, gy);
@@ -3055,7 +3081,7 @@ const { InkPad, fingersDraw, tools } = __mod_ink;
 const { watchDevice } = __mod_device;
 const { exportWorksheetPdf } = __mod_pdf;
 const { activeByok, askClaude, configureTutor, documentPageRequest, expectsGrades, followUpRequest, isArtifactHost, marksToPaper, normalizeGrades, pageRequest, parseReply, penHintRequest, PROVIDER_MODELS, localAgent, reportProgress, savedGraderConfig, saveGraderConfig, tutorAvailable, tutorName, watchForNewQuiz, whenAgentAway } = __mod_tutor;
-const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #ffffff;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\nposition: relative;\nz-index: 1;\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.inkpad .predict {\nz-index: 2;\n}\n.inkpad .marks {\nz-index: 3;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\nz-index: 0;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.28) calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad,\nhtml.pen-dark .inkpad {\nbackground-color: #17191e !important;\nborder-color: #323742 !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-ruled,\nhtml.pen-dark .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.12) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-grid,\nhtml.pen-dark .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad canvas,\nhtml[data-darkreader-scheme=\"dark\"] .inkpad .figure-bg,\nhtml.pen-dark .inkpad canvas,\nhtml.pen-dark .inkpad .figure-bg {\nfilter: invert(0.92) hue-rotate(180deg);\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks path,\nhtml.pen-dark .marks path {\nstroke: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks text,\nhtml.pen-dark .marks text {\nfill: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks .mark-note,\nhtml.pen-dark .marks .mark-note {\ncolor: #fca5a5;\ntext-shadow: 0 0 4px #17191e, 0 0 4px #17191e, 0 0 4px #17191e;\n}\n:where(body:has(pen-header)) {\nmax-width: 840px;\nmargin: 0 auto;\npadding: 0 1rem 3rem;\nfont-family: system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;\nline-height: 1.55;\nbackground: #fff;\ncolor: #000;\n}\n:where(body:has(pen-header) section) {\nmargin: 1.35rem 0;\n}\n:where(body:has(pen-header) h2) {\nfont-size: 1.06rem;\nmargin: 0 0 0.35rem;\n}\nhtml.pen-easy-reading body {\nletter-spacing: 0.03em;\nword-spacing: 0.12em;\nline-height: 1.78 !important;\n}\nhtml.pen-hide-marks .inkpad .marks {\ndisplay: none !important;\n}\nhtml[data-pen-tool=\"eraser\"] .inkpad:not(.readonly) {\nborder-style: dashed;\n}\nhtml[data-pen-tool=\"eraser\"] .inkpad:not(.readonly) canvas {\ncursor: cell;\n}\n.pen-timeup-bar {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 40;\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.6rem;\npadding: 0.7rem 1rem;\nborder: 2px solid #b91c1c;\nborder-radius: 10px;\nbackground: #fef2f2;\ncolor: #000;\nfont-weight: 600;\n}\n.pen-live-hint {\nmargin: 0.4rem 0 0.15rem;\n}\n.pen-live-hint-btn {\nmin-height: 32px;\nfont-size: 0.85rem;\n}\n.pen-live-hint-list {\ndisplay: flex;\nflex-direction: column;\ngap: 0.4rem;\nmargin-top: 0.4rem;\n}\n.pen-live-hint-list:empty {\ndisplay: none;\n}\n.pen-live-hint-item {\npadding: 0.45rem 0.75rem;\nborder-left: 3px solid #1e3a8a;\nborder-radius: 6px;\nbackground: rgb(30 58 138 / 0.05);\n}\n.pen-live-hint-num {\ndisplay: block;\nfont-size: 0.75rem;\nfont-weight: 700;\ntext-transform: uppercase;\nletter-spacing: 0.04em;\nopacity: 0.75;\n}\n.pen-manual-card {\nwidth: min(640px, 100%);\nmax-height: 88vh;\npadding: 0.95rem 1.1rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.6rem;\n}\n.pen-manual-list {\noverflow-y: auto;\ndisplay: flex;\nflex-direction: column;\ngap: 0.75rem;\npadding-right: 0.25rem;\n}\n.pen-manual-item {\npadding: 0.65rem 0.75rem;\nborder: 1px solid rgb(0 0 0 / 0.22);\nborder-radius: 8px;\ndisplay: flex;\nflex-direction: column;\ngap: 0.45rem;\n}\n.pen-manual-grid {\ndisplay: grid;\ngrid-template-columns: 1.4fr 1fr;\ngap: 0.5rem;\n}\n.pen-manual-textarea {\nmin-height: 54px;\nresize: vertical;\n}\n.pen-header-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nflex: none;\n}\n.pen-ref-card {\nwidth: min(680px, 100%);\nmax-height: 84vh;\npadding: 0.95rem 1.15rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.6rem;\n}\n.pen-ref-body {\noverflow-y: auto;\nline-height: 1.55;\n}\n.pen-inline-review,\n.pen-inline-review-bar {\nmargin: 0.55rem 0 1rem;\npadding: 0.75rem 0.9rem;\nborder: 2px dashed #1e3a8a;\nborder-radius: 10px;\nbackground: #f8fafc;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.5rem;\n}\n.pen-inline-review-head {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.45rem;\n}\n.pen-stamp-row {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.25rem;\n}\n.pen-stamp-label {\nfont-size: 0.8rem;\nfont-weight: 600;\nopacity: 0.75;\n}\n.pen-stamp-row .pen-sheet-btn {\nmin-height: 28px;\npadding: 0 0.48rem;\nfont-size: 0.82rem;\n}\n.pen-stamp-pick[aria-pressed=\"true\"] {\nbackground: #dc2626 !important;\ncolor: #fff !important;\nborder-color: #dc2626 !important;\n}\n.inkpad.pen-stamp-armed {\nborder: 2px solid #dc2626 !important;\ncursor: crosshair;\n}\n.inkpad.pen-stamp-armed canvas {\ncursor: crosshair !important;\n}\n.pen-replay-btn {\ndisplay: none;\nposition: absolute;\nright: 8px;\nbottom: 8px;\nz-index: 4;\nmin-height: 28px;\npadding: 0 0.55rem;\nborder: 1px solid rgb(0 0 0 / 0.4);\nborder-radius: 999px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.78rem;\nfont-weight: 600;\ncursor: pointer;\n}\n.inkpad.readonly:not(.pen-pad-empty) .pen-replay-btn {\ndisplay: inline-flex;\nalign-items: center;\n}\n.hwq-eink .pen-replay-btn {\ndisplay: none !important;\n}\nhtml.pen-exam-mode .pen-hint-box,\nhtml.pen-exam-mode .pen-selfcheck-box,\nhtml.pen-exam-mode .pen-ai-menu,\nhtml.pen-exam-mode .pen-manual-menu,\nhtml.pen-exam-mode .pen-submit-utils .pen-boox-btn[title*=\"Copy\"],\nhtml.pen-exam-mode .pen-submit-utils .pen-boox-btn[title*=\"ChatGPT\"] {\ndisplay: none !important;\n}\n.hwq-eink .pen-timeup-bar,\n.hwq-eink .pen-live-hint-item,\n.hwq-eink .pen-ref-card,\n.hwq-eink .pen-inline-review,\n.hwq-eink .pen-inline-review-bar,\n.hwq-eink .pen-manual-card {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\nhtml.pen-dark .pen-timeup-bar,\nhtml.pen-dark .pen-live-hint-item,\nhtml.pen-dark .pen-ref-card,\nhtml.pen-dark .pen-inline-review,\nhtml.pen-dark .pen-inline-review-bar,\nhtml.pen-dark .pen-manual-card,\nhtml.pen-dark .pen-manual-item {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\n.pen-sr {\nposition: absolute;\nwidth: 1px;\nheight: 1px;\noverflow: hidden;\nclip-path: inset(50%);\nwhite-space: nowrap;\n}\npen-toolbar {\nposition: fixed;\nright: 6px;\ntop: 50%;\ntransform: translateY(-50%);\nz-index: 30;\n}\nhtml.pen-rail-left pen-toolbar {\nright: auto;\nleft: 6px;\n}\n.pen-has-toolbar body {\npadding-right: 54px;\n}\nhtml.pen-has-toolbar.pen-rail-left body {\npadding-right: 0;\npadding-left: 54px;\n}\n.pen-bar {\nposition: relative;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\npadding: 0.25rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-bar > button {\nposition: relative;\nmin-height: 36px;\nmin-width: 36px;\npadding: 0;\ndisplay: grid;\nplace-items: center;\nfont-size: 1rem;\nline-height: 1;\n}\n.pen-ink-dot {\nposition: absolute;\nright: 4px;\nbottom: 4px;\nwidth: 7px;\nheight: 7px;\nborder-radius: 999px;\nbackground: var(--active-ink, #1f2937);\nborder: 1px solid #fff;\npointer-events: none;\n}\n.pen-bar > .pen-nav-btn {\nfont-size: 0.72rem;\nfont-weight: 700;\nletter-spacing: -0.02em;\npadding: 0 0.25rem;\n}\n.pen-bar > .pen-nav-btn[hidden],\n.pen-bar > .pen-timer-pill[hidden] {\ndisplay: none;\n}\n.pen-bar > .pen-timer-pill {\nmin-height: 26px;\nfont-size: 0.68rem;\nfont-variant-numeric: tabular-nums;\nfont-weight: 600;\npadding: 0 0.2rem;\n}\n.pen-bar > .pen-timer-pill.pen-timer-low {\nbackground: #b91c1c;\ncolor: #fff;\nborder-color: #b91c1c;\n}\n.pen-nav-popover {\nposition: absolute;\nright: calc(100% + 8px);\ntop: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.28rem;\nwidth: min(270px, calc(100vw - 74px));\nmax-height: 66vh;\noverflow-y: auto;\npadding: 0.5rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\nhtml.pen-rail-left .pen-nav-popover,\nhtml.pen-rail-left .pen-popover {\nright: auto;\nleft: calc(100% + 8px);\n}\n.pen-nav-popover[hidden] {\ndisplay: none;\n}\n.pen-nav-head {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.4rem;\nfont-size: 0.8rem;\ntext-transform: uppercase;\nletter-spacing: 0.04em;\nopacity: 0.78;\npadding: 0.05rem 0.2rem 0.1rem;\n}\n.pen-nav-total-pts {\nfont-weight: 700;\nfont-size: 0.74rem;\ntext-transform: none;\nletter-spacing: 0;\n}\n.pen-nav-progress {\nheight: 5px;\nborder-radius: 999px;\nbackground: rgb(0 0 0 / 0.12);\noverflow: hidden;\nmargin-bottom: 0.15rem;\n}\n.pen-nav-progress-fill {\nheight: 100%;\nwidth: 0%;\nbackground: #000;\n}\n.pen-nav-list {\ndisplay: flex;\nflex-direction: column;\ngap: 0.22rem;\n}\n.pen-nav-jump {\nmargin-top: 0.2rem;\nmin-height: 34px;\npadding: 0 0.55rem;\nfont-size: 0.82rem;\nfont-weight: 600;\ntext-align: center;\n}\n.pen-nav-jump[hidden] {\ndisplay: none;\n}\n.pen-nav-item {\ndisplay: flex;\nalign-items: center;\ngap: 0.45rem;\nmin-height: 36px;\npadding: 0.2rem 0.55rem;\ntext-align: left;\nfont-size: 0.86rem;\n}\n.pen-nav-icon {\nflex: none;\nwidth: 1.1em;\ntext-align: center;\nfont-weight: 700;\n}\n.pen-nav-text {\nflex: 1;\nmin-width: 0;\noverflow: hidden;\ntext-overflow: ellipsis;\nwhite-space: nowrap;\n}\n.pen-nav-pts {\nflex: none;\nfont-size: 0.74rem;\nopacity: 0.7;\n}\n.pen-ink-controls {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.4rem;\npadding: 0.15rem 0.1rem;\n}\n.pen-swatches,\n.pen-nibs {\ndisplay: flex;\ngap: 0.28rem;\nalign-items: center;\n}\n.pen-popover .pen-swatch {\nmin-width: 28px;\nmin-height: 28px;\npadding: 0;\nborder-radius: 999px;\nbackground: var(--swatch, #1f2937);\nborder: 2px solid transparent;\nbox-shadow: inset 0 0 0 2px #fff;\n}\n.pen-popover .pen-swatch[aria-pressed=\"true\"] {\nborder-color: #000;\nbackground: var(--swatch, #1f2937);\n}\n.pen-popover .pen-nib {\nmin-width: 28px;\nmin-height: 28px;\npadding: 0;\ntext-align: center;\nfont-size: 0.78rem;\nfont-weight: 700;\n}\n.pen-paper-row {\ndisplay: flex;\ngap: 0.22rem;\n}\n.pen-paper-row[hidden] {\ndisplay: none;\n}\n.pen-popover .pen-paper-btn {\nflex: 1;\nmin-height: 30px;\npadding: 0 0.35rem;\ntext-align: center;\nfont-size: 0.78rem;\nfont-weight: 600;\n}\n.pen-rubric {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.3rem;\nmargin: 0 0 0.35rem;\n}\n.pen-rubric-item {\ndisplay: inline-flex;\nalign-items: center;\ngap: 0.25rem;\nfont-size: 0.8rem;\nline-height: 1.3;\npadding: 0.14rem 0.5rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 999px;\nbackground: rgb(0 0 0 / 0.03);\ncolor: inherit;\n}\n.pen-rubric-item::before {\ncontent: \"☐\";\nfont-size: 0.82em;\nopacity: 0.7;\n}\n.pen-rubric-item[data-met=\"true\"] {\nborder-color: #15803d;\nbackground: #f0fdf4;\ncolor: #15803d;\nfont-weight: 600;\n}\n.pen-rubric-item[data-met=\"true\"]::before {\ncontent: \"✓\";\nopacity: 1;\n}\n.pen-rubric-item[data-met=\"false\"] {\nborder-style: dashed;\nopacity: 0.72;\n}\n.pen-hint-box {\nmargin: 0.35rem 0 0.2rem;\npadding: 0.28rem 0.65rem;\nborder: 1px dashed rgb(0 0 0 / 0.35);\nborder-radius: 8px;\nbackground: rgb(0 0 0 / 0.02);\nfont-size: 0.9rem;\n}\n.pen-hint-box summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-hint-box[open] summary {\nmargin-bottom: 0.25rem;\n}\n.pen-confirm-bar {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 0.45rem 0;\npadding: 0.6rem 0.85rem;\nborder: 2px solid #b45309;\nborder-radius: 10px;\nbackground: #fffbeb;\ncolor: #000;\n}\n.pen-confirm-text {\nfont-weight: 600;\nfont-size: 0.92rem;\n}\n.pen-confirm-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\n}\n.pen-confirm-send,\n.pen-retry-missed {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\nfont-size: 0.9rem;\nfont-weight: 600;\ncursor: pointer;\n}\n.pen-prev-feedback {\nmargin: 0.4rem 0 0.9rem;\npadding: 0.35rem 0.7rem;\nborder: 1px dashed rgb(0 0 0 / 0.45);\nborder-left: 4px solid #b45309;\nborder-radius: 8px;\nbackground: rgb(0 0 0 / 0.025);\nfont-size: 0.92rem;\n}\n.pen-prev-feedback summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-timer-row {\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-timer-row .pen-timer-toggle {\nflex: 1;\n}\n.pen-timer-row .pen-timer-reset {\nflex: none;\nmin-width: 34px;\npadding: 0;\ntext-align: center;\n}\n.pen-timer-row .pen-timer-reset[hidden] {\ndisplay: none;\n}\n.pen-menu-sep {\nborder: none;\nborder-top: 1px solid rgb(0 0 0 / 0.18);\nmargin: 0.15rem 0;\n}\n.pen-popover {\nposition: absolute;\nright: calc(100% + 8px);\nbottom: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.28rem;\nwidth: min(260px, calc(100vw - 68px));\nmax-height: 82vh;\noverflow-y: auto;\npadding: 0.45rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-menu-sec {\nfont-size: 0.72rem;\nfont-weight: 700;\ntext-transform: uppercase;\nletter-spacing: 0.05em;\nopacity: 0.65;\npadding: 0.2rem 0.15rem 0;\n}\n.pen-menu-sec:first-child {\npadding-top: 0;\n}\n.pen-menu-grid {\ndisplay: grid;\ngrid-template-columns: 1fr 1fr;\ngap: 0.25rem;\n}\n.pen-menu-grid button {\nmin-height: 34px;\npadding: 0 0.4rem;\nfont-size: 0.82rem;\ntext-align: left;\noverflow: hidden;\ntext-overflow: ellipsis;\n}\n.pen-bar > .pen-timer-pill.pen-timer-idle {\nopacity: 0.72;\n}\n.pen-say-row {\nmargin-bottom: 0.35rem;\n}\n.pen-say-btn {\nmin-height: 34px;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-popover[hidden] {\ndisplay: none;\n}\n.pen-popover button {\nmin-height: 36px;\npadding: 0 0.65rem;\ntext-align: left;\nfont-size: 0.9rem;\nwhite-space: nowrap;\n}\n.pen-has-toolbar pen-input .pen-tools {\ndisplay: none;\n}\n.inkpad.pen-pad-active {\nborder-color: #000;\nbox-shadow: 0 0 0 1px #000;\n}\n.inkpad.pen-pad-flagged {\nborder-style: dashed;\nborder-width: 2px;\n}\n.inkpad.pen-pad-empty::after {\ncontent: attr(data-empty-hint);\nposition: absolute;\nleft: 12px;\ntop: 10px;\nz-index: 2;\npointer-events: none;\nfont-size: 0.85rem;\ncolor: rgb(100 116 139 / 0.65);\n}\n.inkpad:has(.pen-pad-pts).pen-pad-empty::after {\nleft: 68px;\n}\n.pen-pad-pts {\nposition: absolute;\nleft: 8px;\ntop: 8px;\nz-index: 4;\npointer-events: none;\npadding: 0.12rem 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont-size: 0.74rem;\nfont-weight: 700;\n}\n.pen-pad-top-actions {\nposition: absolute;\ntop: 6px;\nright: 6px;\nz-index: 4;\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-pad-btn {\nmin-width: 32px;\nmin-height: 32px;\npadding: 0 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.45);\nborder-radius: 8px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\nline-height: 1;\ncursor: pointer;\n}\n.pen-more-in {\nposition: absolute;\nright: 6px;\nbottom: 6px;\nz-index: 4;\nfont-weight: 700;\n}\n.pen-pin-in,\n.pen-flag-in {\nfont-size: 0.84rem;\n}\n.pen-pin-in[aria-pressed=\"true\"],\n.pen-flag-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\n.inkpad.readonly .pen-pad-btn,\n.inkpad.readonly .pen-pad-top-actions {\ndisplay: none;\n}\n.pen-pinned {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 28;\ndisplay: flex;\nalign-items: flex-start;\ngap: 0.5rem;\npadding: 0.45rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-pinned-body {\nflex: 1;\nmin-width: 0;\nmax-height: 28vh;\noverflow-y: auto;\nfont-size: 0.95rem;\nline-height: 1.4;\n}\n.pen-pinned-body > :first-child {\nmargin-top: 0;\n}\n.pen-pinned-body > :last-child {\nmargin-bottom: 0;\n}\n.pen-unpin {\nflex: none;\nmin-width: 32px;\nmin-height: 32px;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1.5rem 0 1rem;\n}\n.pen-submit-shell {\ndisplay: flex;\nflex-direction: column;\ngap: 0.55rem;\n}\n.pen-submit-primary {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.65rem;\n}\npen-submit .pen-send {\nmin-height: 44px;\npadding: 0 1.25rem;\nfont-weight: 700;\nfont-size: 1rem;\n}\n.pen-readiness {\nfont-size: 0.88rem;\npadding: 0.22rem 0.6rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 999px;\n}\n.pen-readiness[hidden] {\ndisplay: none;\n}\n.pen-readiness-all {\nfont-weight: 600;\nborder-color: #15803d;\ncolor: #15803d;\n}\n.pen-submit-utils {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nalign-items: center;\n}\n.pen-boox-btn {\nfont-size: 0.84rem;\nmin-height: 32px;\npadding: 0 0.6rem;\nborder-color: rgb(0 0 0 / 0.35);\n}\n.pen-boox-file[hidden] {\ndisplay: none;\n}\n.pen-review-bar {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 0.4rem 0 0.65rem;\npadding: 0.5rem 0.75rem;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-radius: 10px;\nbackground: rgb(0 0 0 / 0.025);\n}\n.pen-review-pills,\n.pen-review-filters {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nalign-items: center;\n}\n.pen-review-pill {\nfont-size: 0.84rem;\nfont-weight: 700;\npadding: 0.16rem 0.55rem;\nborder-radius: 999px;\nborder: 1px solid currentColor;\n}\n.pen-score-pill {\nfont-size: 0.88rem;\nfont-weight: 800;\npadding: 0.18rem 0.65rem;\nborder-radius: 999px;\nbackground: #000;\ncolor: #fff;\nborder: 1px solid #000;\n}\n.pen-time-pill {\nfont-size: 0.82rem;\nfont-weight: 600;\nfont-variant-numeric: tabular-nums;\npadding: 0.16rem 0.5rem;\nborder-radius: 999px;\nborder: 1px solid rgb(0 0 0 / 0.35);\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback-head {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.4rem;\nmargin-bottom: 0.25rem;\n}\n.pen-feedback-head .pen-badge,\n.pen-feedback-head .pen-verdict {\nmargin-bottom: 0;\n}\n.pen-pts-earned {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.12rem 0.48rem;\nborder-radius: 999px;\nborder: 1px solid rgb(0 0 0 / 0.28);\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-flag-tag {\nfont-size: 0.78rem;\nfont-weight: 700;\npadding: 0.1rem 0.42rem;\nborder-radius: 999px;\nborder: 1px solid currentColor;\nopacity: 0.8;\n}\n.pen-review-pill[data-verdict=\"correct\"] {\ncolor: #15803d;\nbackground: #f0fdf4;\n}\n.pen-review-pill[data-verdict=\"partial\"] {\ncolor: #b45309;\nbackground: #fffbeb;\n}\n.pen-review-pill[data-verdict=\"incorrect\"] {\ncolor: #b91c1c;\nbackground: #fef2f2;\n}\n.pen-review-pill[data-verdict=\"blank\"] {\ncolor: #475569;\nbackground: #f8fafc;\n}\n.pen-filter-btn {\nmin-height: 30px;\npadding: 0 0.6rem;\nfont-size: 0.82rem;\n}\n.pen-filter-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml[data-review-filter=\"needs-work\"] .pen-feedback[data-verdict=\"correct\"],\nhtml[data-review-filter=\"flagged\"] .pen-feedback:not([data-flagged=\"true\"]) {\nopacity: 0.36;\n}\n.pen-feedback {\nmargin: 0.55rem 0 1.15rem;\npadding: 0.75rem 1rem;\nborder: 1px solid rgb(0 0 0 / 0.22);\nborder-left: 4px solid #1e3a8a;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\nline-height: 1.58;\n}\n.pen-feedback[data-verdict=\"correct\"] {\nborder-left-color: #15803d;\n}\n.pen-feedback[data-verdict=\"partial\"] {\nborder-left-color: #b45309;\n}\n.pen-feedback[data-verdict=\"incorrect\"] {\nborder-left-color: #b91c1c;\n}\n.pen-feedback[data-verdict=\"blank\"] {\nborder-left-color: #475569;\n}\n.pen-feedback p {\nmargin: 0.35rem 0;\n}\n.pen-badge {\ndisplay: inline-block;\npadding: 0.16rem 0.6rem;\nmargin-bottom: 0.3rem;\nborder: 1px solid #1e3a8a;\nborder-radius: 999px;\nbackground: #eff6ff;\ncolor: #1e3a8a;\nfont-size: 0.85rem;\nfont-weight: 700;\n}\n.pen-badge[data-verdict=\"correct\"],\n.pen-verdict[data-verdict=\"correct\"] {\ncolor: #15803d;\nborder-color: #15803d;\nbackground: #f0fdf4;\n}\n.pen-badge[data-verdict=\"partial\"],\n.pen-verdict[data-verdict=\"partial\"] {\ncolor: #b45309;\nborder-color: #b45309;\nbackground: #fffbeb;\n}\n.pen-badge[data-verdict=\"incorrect\"],\n.pen-verdict[data-verdict=\"incorrect\"] {\ncolor: #b91c1c;\nborder-color: #b91c1c;\nbackground: #fef2f2;\n}\n.pen-badge[data-verdict=\"blank\"],\n.pen-verdict[data-verdict=\"blank\"] {\ncolor: #475569;\nborder-color: #475569;\nbackground: #f8fafc;\n}\n.pen-verdict {\ndisplay: inline-block;\npadding: 0.12rem 0.52rem;\nmargin-bottom: 0.25rem;\nborder: 1px solid currentColor;\nborder-radius: 999px;\nfont-size: 0.85rem;\n}\n.pen-read-line {\nfont-size: 0.9rem;\npadding: 0.28rem 0 0.35rem;\nmargin: 0.15rem 0 0.45rem;\nborder-bottom: 1px solid rgb(0 0 0 / 0.1);\ncolor: rgb(0 0 0 / 0.78);\n}\n.pen-md > :first-child {\nmargin-top: 0.2rem;\n}\n.pen-md > :last-child {\nmargin-bottom: 0.2rem;\n}\n.pen-md-h {\nmargin: 0.7rem 0 0.25rem;\nfont-size: 1rem;\nfont-weight: 700;\n}\n.pen-md ul,\n.pen-md ol {\nmargin: 0.35rem 0 0.45rem;\npadding-left: 1.35rem;\n}\n.pen-md li {\nmargin: 0.18rem 0;\n}\n.pen-md blockquote {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.7rem;\nborder-left: 3px solid #000;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-md code {\npadding: 0.08rem 0.3rem;\nborder-radius: 4px;\nbackground: rgb(0 0 0 / 0.07);\nfont-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\nfont-size: 0.9em;\n}\n.pen-code {\nmargin: 0.45rem 0;\npadding: 0.55rem 0.75rem;\noverflow-x: auto;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-radius: 6px;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-code code {\npadding: 0;\nbackground: none;\n}\n.pen-table-wrap {\nmargin: 0.45rem 0;\noverflow-x: auto;\n}\n.pen-md table {\nborder-collapse: collapse;\nwidth: 100%;\nfont-size: 0.92rem;\n}\n.pen-md th,\n.pen-md td {\npadding: 0.32rem 0.55rem;\nborder: 1px solid #000;\ntext-align: left;\n}\n.pen-md th {\nfont-weight: 700;\nbackground: rgb(0 0 0 / 0.05);\n}\n.pen-disclosure {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.65rem;\nborder: 1px dashed #000;\nborder-radius: 6px;\n}\n.pen-disclosure summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-disclosure[open] summary {\nmargin-bottom: 0.3rem;\n}\n.pen-next-time {\nfont-weight: 600;\n}\n.pen-summary-card {\nmargin: 0.65rem 0;\npadding: 0.7rem 0.9rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nmargin: 0.55rem 0;\n}\n.pen-followup {\nmargin-top: 0.75rem;\npadding: 0.7rem 0.85rem;\nborder: 1px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-followup-thread {\ndisplay: flex;\nflex-direction: column;\ngap: 0.5rem;\n}\n.pen-followup-thread:not(:empty) {\nmargin-bottom: 0.6rem;\n}\n.pen-followup-msg {\npadding: 0.45rem 0.65rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 8px;\n}\n.pen-followup-student {\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-followup-who {\ndisplay: block;\nfont-size: 0.78rem;\nfont-weight: 700;\ntext-transform: uppercase;\nletter-spacing: 0.03em;\nopacity: 0.75;\nmargin-bottom: 0.15rem;\n}\n.pen-followup-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\n}\n.pen-followup-input {\nflex: 1 1 14rem;\nmin-width: 0;\nmin-height: 40px;\npadding: 0 0.65rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-followup-status {\nmargin: 0.35rem 0 0;\nfont-size: 0.88rem;\n}\n.pen-grader-backdrop {\nposition: fixed;\ninset: 0;\nz-index: 60;\ndisplay: grid;\nplace-items: center;\npadding: 1rem;\nbackground: rgb(0 0 0 / 0.5);\n}\n.pen-grader-card {\nwidth: min(440px, 100%);\npadding: 1rem 1.1rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.65rem;\n}\n.pen-grader-head {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\n}\n.pen-grader-note {\nmargin: 0;\nfont-size: 0.88rem;\nline-height: 1.4;\n}\n.pen-grader-label {\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-grader-label[hidden] {\ndisplay: none;\n}\n.pen-grader-field {\nmin-height: 38px;\npadding: 0.35rem 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-weight: 400;\n}\n.pen-grader-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nmargin-top: 0.2rem;\n}\n.pen-grader-actions .pen-send {\nmin-height: 38px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\ncursor: pointer;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #ffffff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.35) calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px));\n}\n.hwq-eink .pen-feedback,\n.hwq-eink .pen-badge,\n.hwq-eink .pen-verdict,\n.hwq-eink .pen-review-bar,\n.hwq-eink .pen-review-pill,\n.hwq-eink .pen-time-pill,\n.hwq-eink .pen-readiness,\n.hwq-eink .pen-pad-btn,\n.hwq-eink .pen-pad-pts,\n.hwq-eink .pen-pts-earned,\n.hwq-eink .pen-rubric-item,\n.hwq-eink .pen-hint-box,\n.hwq-eink .pen-confirm-bar,\n.hwq-eink .pen-prev-feedback,\n.hwq-eink .pen-boox-btn {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-score-pill,\n.hwq-eink .pen-confirm-send,\n.hwq-eink .pen-retry-missed {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\n.hwq-eink .pen-rubric-item[data-met=\"true\"] {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\nborder-width: 2px;\n}\n.hwq-eink .pen-nav-progress {\nbackground: #fff;\nborder: 1px solid #000;\n}\n.hwq-eink .pen-read-line {\ncolor: #000;\nborder-bottom-color: #000;\n}\n.hwq-eink .pen-feedback[data-verdict=\"partial\"],\n.hwq-eink .pen-feedback[data-verdict=\"incorrect\"] {\nborder-left-width: 6px;\n}\n.hwq-eink .pen-bar > .pen-timer-pill.pen-timer-low,\n.hwq-eink .pen-filter-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\nhtml.pen-dark body {\nbackground: #111317 !important;\ncolor: #e6e8ec !important;\n}\nhtml.pen-dark .pen-bar,\nhtml.pen-dark .pen-popover,\nhtml.pen-dark .pen-nav-popover,\nhtml.pen-dark .pen-pinned,\nhtml.pen-dark .pen-feedback,\nhtml.pen-dark .pen-summary-card,\nhtml.pen-dark .pen-followup,\nhtml.pen-dark .pen-grader-card,\nhtml.pen-dark .pen-review-bar,\nhtml.pen-dark .pen-confirm-bar,\nhtml.pen-dark .pen-prev-feedback,\nhtml.pen-dark .pen-hint-box,\nhtml.pen-dark .pen-sheet-card,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar,\nhtml[data-darkreader-scheme=\"dark\"] .pen-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-nav-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pinned {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-followup-input,\nhtml.pen-dark .pen-grader-field,\nhtml.pen-dark .pen-disclosure,\nhtml.pen-dark .pen-badge,\nhtml.pen-dark .pen-verdict,\nhtml.pen-dark .pen-review-pill,\nhtml.pen-dark .pen-time-pill,\nhtml.pen-dark .pen-pts-earned,\nhtml.pen-dark .pen-rubric-item,\nhtml.pen-dark .pen-readiness,\nhtml.pen-dark .pen-pad-pts {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-score-pill,\nhtml.pen-dark .pen-confirm-send,\nhtml.pen-dark .pen-retry-missed,\nhtml.pen-dark .pen-nav-progress-fill {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-nav-progress {\nbackground: rgb(255 255 255 / 0.14) !important;\n}\nhtml.pen-dark .pen-read-line {\ncolor: #b8c0cc !important;\nborder-bottom-color: #363c48 !important;\n}\nhtml.pen-dark .pen-md code,\nhtml.pen-dark .pen-code,\nhtml.pen-dark .pen-md blockquote,\nhtml.pen-dark .pen-md th,\nhtml.pen-dark .pen-followup-student {\nbackground: rgb(255 255 255 / 0.06) !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-pad-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pad-btn {\nbackground: rgb(28 31 38 / 0.9) !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button,\nhtml.pen-dark .pen-unpin,\nhtml.pen-dark .pen-sheet-btn,\nhtml.pen-dark .pen-boox-btn,\nhtml.pen-dark .pen-filter-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button,\nhtml[data-darkreader-scheme=\"dark\"] .pen-unpin,\nhtml[data-darkreader-scheme=\"dark\"] .pen-boox-btn {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button[aria-pressed=\"true\"],\nhtml.pen-dark .pen-pin-in[aria-pressed=\"true\"],\nhtml.pen-dark .pen-flag-in[aria-pressed=\"true\"],\nhtml.pen-dark .pen-filter-btn[aria-pressed=\"true\"],\nhtml.pen-dark pen-submit .pen-send,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-pin-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-flag-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] pen-submit .pen-send {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-popover .pen-swatch {\nbackground: var(--swatch, #1f2937) !important;\nbox-shadow: inset 0 0 0 2px #1c1f26 !important;\n}\nhtml.pen-dark .pen-popover .pen-swatch[aria-pressed=\"true\"] {\nborder-color: #e6e8ec !important;\n}\npen-header {\ndisplay: block;\nmargin: 0.75rem 0 1.25rem;\n}\n.pen-header-card {\npadding: 0.85rem 1rem;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-bottom: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-header-top {\ndisplay: flex;\nalign-items: flex-start;\njustify-content: space-between;\ngap: 0.75rem;\n}\n.pen-header-titles {\nflex: 1;\nmin-width: 0;\n}\n.pen-header-title {\nmargin: 0;\nfont-size: 1.38rem;\nline-height: 1.25;\n}\n.pen-header-sub {\nmargin: 0.28rem 0 0;\nfont-size: 0.93rem;\nopacity: 0.8;\n}\n.pen-header-bottom {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem 1rem;\nmargin-top: 0.65rem;\n}\n.pen-header-meta {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\n}\n.pen-meta-chip {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.14rem 0.52rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\n}\n.pen-student-wrap {\ndisplay: inline-flex;\nalign-items: center;\ngap: 0.4rem;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-student-input {\nmin-height: 32px;\nwidth: 13rem;\nmax-width: 55vw;\npadding: 0.15rem 0.5rem;\nborder: none;\nborder-bottom: 1.5px solid #000;\nbackground: transparent;\ncolor: inherit;\nfont: inherit;\nfont-weight: 400;\n}\n.pen-focus-hidden {\ndisplay: none !important;\n}\n.pen-focus-bar {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 1rem 0 1.25rem;\npadding: 0.55rem 0.75rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-focus-pos {\nfont-size: 0.9rem;\nfont-weight: 700;\n}\n.pen-confidence {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.35rem;\nmargin: 0.38rem 0 0.15rem;\n}\n.pen-confidence-label {\nfont-size: 0.82rem;\nopacity: 0.75;\nmargin-right: 0.15rem;\n}\n.pen-conf-btn {\nmin-height: 30px;\npadding: 0 0.6rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.82rem;\ncursor: pointer;\n}\n.pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\nfont-weight: 600;\n}\n.pen-conf-btn:disabled {\nopacity: 0.5;\ncursor: default;\n}\n.pen-conf-tag {\nfont-size: 0.78rem;\nfont-weight: 600;\npadding: 0.1rem 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 999px;\n}\n.pen-conf-warn,\n.pen-conf-warn-pill {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.14rem 0.52rem;\nborder: 1px solid #b45309;\nborder-radius: 999px;\nbackground: #fffbeb;\ncolor: #b45309;\n}\n.pen-progress-pill {\nfont-size: 0.82rem;\nfont-weight: 700;\npadding: 0.16rem 0.55rem;\nborder: 1px solid #15803d;\nborder-radius: 999px;\nbackground: #f0fdf4;\ncolor: #15803d;\n}\n.hwq-eink .pen-header-card,\n.hwq-eink .pen-meta-chip,\n.hwq-eink .pen-focus-bar,\n.hwq-eink .pen-conf-btn,\n.hwq-eink .pen-conf-tag,\n.hwq-eink .pen-conf-warn,\n.hwq-eink .pen-conf-warn-pill,\n.hwq-eink .pen-progress-pill {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml.pen-dark .pen-header-card,\nhtml.pen-dark .pen-focus-bar {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-meta-chip,\nhtml.pen-dark .pen-conf-btn,\nhtml.pen-dark .pen-conf-tag,\nhtml.pen-dark .pen-conf-warn,\nhtml.pen-dark .pen-conf-warn-pill,\nhtml.pen-dark .pen-progress-pill {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-student-input {\nborder-bottom-color: #6b7280 !important;\n}\nhtml.pen-dark .pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n.pen-backup-row {\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-backup-row button {\nflex: 1;\ntext-align: center;\npadding: 0 0.35rem;\nfont-size: 0.84rem;\n}\n.pen-selfcheck-box {\nmargin: 0.4rem 0 0.15rem;\npadding: 0.38rem 0.68rem;\nborder: 1px solid rgb(0 0 0 / 0.32);\nborder-radius: 8px;\nbackground: rgb(0 0 0 / 0.02);\n}\n.pen-selfcheck-box summary {\ncursor: pointer;\nfont-weight: 600;\nfont-size: 0.88rem;\nmin-height: 28px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-selfcheck-marks {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-top: 0.5rem;\npadding-top: 0.45rem;\nborder-top: 1px dashed rgb(0 0 0 / 0.2);\n}\n.pen-self-btn {\nmin-height: 32px;\npadding: 0 0.65rem;\nborder: 1px solid rgb(0 0 0 / 0.4);\nborder-radius: 999px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.84rem;\ncursor: pointer;\n}\n.pen-self-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\nfont-weight: 600;\n}\n.pen-reflection {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.4rem;\nmargin-top: 0.55rem;\npadding-top: 0.5rem;\nborder-top: 1px dashed rgb(0 0 0 / 0.2);\nfont-size: 0.88rem;\n}\n.pen-reflection-label {\nfont-weight: 600;\nwhite-space: nowrap;\n}\n.pen-reflection-input {\nflex: 1 1 14rem;\nmin-width: 0;\nmin-height: 34px;\npadding: 0.2rem 0.55rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 6px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-scratch-card {\nwidth: min(760px, 100%);\nmax-height: 90vh;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.55rem;\n}\n.pen-scratch-sub {\nfont-size: 0.84rem;\nopacity: 0.72;\n}\n.pen-scratch-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.3rem;\n}\n.pen-scratch-tools button[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\n.pen-scratch-body {\noverflow-y: auto;\nflex: 1;\nmin-height: 220px;\n}\n.hwq-eink .pen-selfcheck-box,\n.hwq-eink .pen-self-btn,\n.hwq-eink .pen-reflection-input,\n.hwq-eink .pen-scratch-card {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-self-btn[aria-pressed=\"true\"],\n.hwq-eink .pen-scratch-tools button[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml.pen-dark .pen-selfcheck-box,\nhtml.pen-dark .pen-scratch-card {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-self-btn,\nhtml.pen-dark .pen-reflection-input {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-self-btn[aria-pressed=\"true\"],\nhtml.pen-dark .pen-scratch-tools button[aria-pressed=\"true\"] {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n.pen-sheet-card {\nmargin-top: 0.75rem;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-sheet-head {\ndisplay: flex;\nalign-items: baseline;\njustify-content: space-between;\ngap: 0.5rem;\nfont-size: 1.05rem;\n}\n.pen-sheet-count {\nfont-size: 0.85rem;\npadding: 0.15rem 0.5rem;\nborder: 1px solid #000;\nborder-radius: 999px;\n}\n.pen-sheet-msg {\nmargin: 0.4rem 0 0.65rem;\nfont-size: 0.92rem;\n}\n.pen-sheet-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nmargin-bottom: 0.6rem;\n}\n.pen-sheet-btn {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.75rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\ntext-decoration: none;\ncursor: pointer;\n}\n.pen-sheet-btn[hidden] {\ndisplay: none;\n}\n.pen-sheet-skipped {\nmargin: 0.25rem 0 0.6rem;\nfont-size: 0.88rem;\n}\n.pen-sheet-item {\nmargin: 0.7rem 0;\npadding-top: 0.5rem;\nborder-top: 1px solid #000;\n}\n.pen-sheet-item-head {\nfont-weight: 700;\nfont-size: 0.95rem;\nmargin-bottom: 0.3rem;\n}\n.pen-sheet-typed {\nmargin: 0.25rem 0 0.4rem;\nwhite-space: pre-wrap;\n}\n.pen-sheet-fig {\nmargin: 0.35rem 0 0;\n}\n.pen-sheet-fig img {\ndisplay: block;\nmax-width: 100%;\nborder: 1px solid #000;\nborder-radius: 6px;\n}\n.pen-sheet-details {\nmargin-top: 0.65rem;\n}\n.pen-sheet-details summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 32px;\n}\n.pen-top-progress {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nheight: 3px;\nbackground: rgb(0 0 0 / 0.06);\nz-index: 35;\npointer-events: none;\n}\n.pen-top-progress-fill {\nheight: 100%;\nwidth: 0;\nbackground: #0f172a;\ntransition: width 180ms ease;\n}\n.hwq-eink .pen-top-progress {\nbackground: transparent;\n}\n.hwq-eink .pen-top-progress-fill {\nbackground: #000;\ntransition: none;\n}\nhtml.pen-dark .pen-top-progress {\nbackground: rgb(255 255 255 / 0.08);\n}\nhtml.pen-dark .pen-top-progress-fill {\nbackground: #e6e8ec;\n}\nhtml[data-pen-tool=\"space\"] .inkpad:not(.readonly) {\ncursor: ns-resize;\n}\n.pen-review-chips {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.3rem;\nwidth: 100%;\npadding-top: 0.4rem;\nborder-top: 1px solid rgb(0 0 0 / 0.12);\n}\n.pen-review-chip {\nmin-height: 28px;\npadding: 0 0.5rem;\nborder: 1px solid currentColor;\nborder-radius: 999px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.8rem;\nfont-weight: 700;\ncursor: pointer;\n}\n.pen-review-chip[data-verdict=\"correct\"] { color: #15803d; background: #f0fdf4; }\n.pen-review-chip[data-verdict=\"partial\"] { color: #b45309; background: #fffbeb; }\n.pen-review-chip[data-verdict=\"incorrect\"] { color: #b91c1c; background: #fef2f2; }\n.pen-review-chip[data-verdict=\"blank\"] { color: #475569; background: #f8fafc; }\n.hwq-eink .pen-review-chip {\ncolor: #000 !important;\nbackground: #fff !important;\nborder-color: #000 !important;\n}\nhtml.pen-dark .pen-review-chip {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #4b5563 !important;\n}\n.pen-manual-rubric {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.35rem 0.65rem;\npadding: 0.35rem 0.5rem;\nborder: 1px dashed rgb(0 0 0 / 0.25);\nborder-radius: 8px;\nfont-size: 0.84rem;\n}\n.pen-manual-rubric-item {\ndisplay: inline-flex;\nalign-items: center;\ngap: 0.3rem;\ncursor: pointer;\n}\nhtml.pen-wide body,\nhtml.pen-wide main {\nmax-width: none !important;\nwidth: auto !important;\n}\nhtml.pen-wide.pen-has-toolbar body {\npadding-left: 1rem;\npadding-right: 4.1rem;\n}\nhtml.pen-wide.pen-has-toolbar.pen-rail-left body {\npadding-left: 4.1rem;\npadding-right: 1rem;\n}\n.pen-wide-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml.pen-dark .pen-wide-btn[aria-pressed=\"true\"] {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\n}\n.hwq-eink .inkpad {\ncontain: layout paint;\n}\n.hwq-eink .inkpad canvas {\nwill-change: contents;\n}\nhtml.pen-task-pane body,\nhtml.pen-task-pane main {\nmax-width: none !important;\nwidth: auto !important;\npadding-top: 3.7rem !important;\n}\nhtml.pen-task-pane.pen-has-toolbar body {\npadding-left: 1rem;\npadding-right: 4.1rem;\n}\nhtml.pen-task-pane.pen-has-toolbar.pen-rail-left body {\npadding-left: 4.1rem;\npadding-right: 1rem;\n}\nhtml.pen-task-pane pen-header,\nhtml.pen-task-pane .gallery,\nhtml.pen-task-pane .note {\ndisplay: none !important;\n}\nhtml.pen-task-pane section > h2,\nhtml.pen-task-pane section > h3,\nhtml.pen-task-pane section > p,\nhtml.pen-task-pane .pen-rubric,\nhtml.pen-task-pane .pen-feedback {\nmax-width: 860px;\n}\nhtml.pen-task-pane .inkpad.has-figure,\nhtml.pen-wide .inkpad.has-figure {\nmax-width: 900px;\n}\nhtml.pen-task-pane.pen-task-prompt-hidden section > :not(pen-input):not(.pen-feedback):not(.pen-prev-feedback):not(.pen-inline-review) {\ndisplay: none !important;\n}\n.pen-task-topbar {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 32;\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.45rem;\npadding: 0.4rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-task-back {\nmin-height: 36px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 999px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\nfont-size: 0.88rem;\nfont-weight: 700;\ncursor: pointer;\nwhite-space: nowrap;\n}\n.pen-task-title {\ndisplay: flex;\nalign-items: baseline;\ngap: 0.45rem;\nmin-width: 0;\nflex: 1;\nfont-size: 0.92rem;\n}\n.pen-task-label {\noverflow: hidden;\ntext-overflow: ellipsis;\nwhite-space: nowrap;\nopacity: 0.82;\n}\n.pen-task-actions {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.3rem;\n}\n.pen-task-chip {\nmin-height: 34px;\npadding: 0 0.6rem;\nborder: 1px solid rgb(0 0 0 / 0.4);\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.84rem;\nfont-weight: 600;\ncursor: pointer;\n}\n.pen-task-chip[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\n.pen-task-chip:disabled {\nopacity: 0.35;\ncursor: default;\n}\n.pen-expand-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\nhtml.pen-dark .pen-task-topbar {\nbackground: #181b21 !important;\ncolor: #e6e8ec !important;\nborder-bottom-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-task-back {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-task-chip {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-task-chip[aria-pressed=\"true\"] {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n@media print {\n.pen-top-progress,\n.pen-review-chips,\n.pen-wide-btn,\n.pen-task-topbar,\n.pen-expand-in,\npen-toolbar,\n.pen-tools,\n.pen-pad-btn,\n.pen-pad-top-actions,\n.pen-pinned,\n.pen-hint-box,\n.pen-confirm-bar,\n.pen-prev-feedback,\n.pen-sheet-actions,\n.pen-save,\n.pen-boox-btn,\n.pen-readiness,\n.pen-submit-utils,\n.pen-review-filters,\n.pen-followup-form,\n.pen-feedback-actions,\n.pen-grader-backdrop,\n.pen-focus-bar,\n.pen-focus-btn,\n.pen-confidence,\n.pen-selfcheck-box,\n.pen-live-hint,\n.pen-timeup-bar,\n.pen-ref-btn,\n.pen-replay-btn,\n.pen-inline-review,\n.pen-inline-review-bar,\n.pen-reflection-empty,\npen-submit .pen-send {\ndisplay: none !important;\n}\n.pen-focus-hidden {\ndisplay: block !important;\n}\n.inkpad.pen-pad-empty::after {\ncontent: none !important;\n}\n.inkpad,\n.pen-feedback,\n.pen-summary-card,\n.pen-review-bar {\nbreak-inside: avoid;\npage-break-inside: avoid;\n}\n.pen-has-toolbar body,\nhtml.pen-has-toolbar.pen-rail-left body {\npadding-right: 0 !important;\npadding-left: 0 !important;\n}\n}";
+const STYLES = ".inkpad {\nposition: relative;\nborder: 1px solid var(--hwq-field, #7d8796);\nborder-radius: 10px;\noverflow: hidden;\ncontain: layout paint;\nbackground-color: #ffffff;\n--line: 50px;\nforced-color-adjust: none;\n}\n.inkpad canvas {\nposition: relative;\nz-index: 1;\ndisplay: block;\nwidth: 100%;\ntouch-action: none;\nuser-select: none;\n-webkit-user-select: none;\n-webkit-touch-callout: none;\ncursor: crosshair;\n}\n.inkpad.readonly canvas {\ntouch-action: pan-y;\n}\n.inkpad .predict,\n.inkpad .marks {\nposition: absolute;\ninset: 0;\nwidth: 100%;\nheight: 100%;\npointer-events: none;\n}\n.inkpad .predict {\nz-index: 2;\n}\n.inkpad .marks {\nz-index: 3;\n}\n.marks path {\nfill: none;\nstroke: #dc2626;\nstroke-width: 5;\nstroke-linecap: round;\nstroke-linejoin: round;\nopacity: 0.85;\n}\n.marks text {\nfill: #dc2626;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nopacity: 0.9;\n}\n::placeholder {\ncolor: #5b6b81;\nopacity: 1;\n}\n.marks foreignObject {\noverflow: visible;\n}\n.marks .mark-note {\ncolor: #b91c1c;\nfont-family: \"Segoe Print\", \"Bradley Hand\", \"Comic Sans MS\", cursive;\nfont-size: 30px;\nline-height: 38px;\noverflow-wrap: anywhere;\ntext-shadow: 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff, 0 0 4px #ffffff;\n}\n.marks .mark-q {\nfont-weight: 700;\n}\n.inkpad .figure-bg {\nposition: absolute;\ntop: 0;\nleft: 0;\nwidth: 100%;\nz-index: 0;\npointer-events: none;\nuser-select: none;\n-webkit-user-select: none;\n}\n.inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.28) calc(var(--line) - 1px));\nbackground-size: 100% var(--line);\n}\n.inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(100 116 139 / 0.24) calc(var(--line) - 1px));\nbackground-size: var(--line) var(--line);\n}\n.inkpad.paper-dots {\nbackground-image: radial-gradient(circle, rgb(100 116 139 / 0.42) 1.35px, transparent 1.5px);\nbackground-size: var(--line) var(--line);\nbackground-position: calc(var(--line) / 2) calc(var(--line) / 2);\n}\n.inkpad.readonly {\nborder-style: dashed;\n}\n.inkpad.readonly canvas {\ncursor: default;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad,\nhtml.pen-dark .inkpad {\nbackground-color: #17191e !important;\nborder-color: #323742 !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-ruled,\nhtml.pen-dark .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.12) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-grid,\nhtml.pen-dark .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(255 255 255 / 0.11) calc(var(--line) - 1px)) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad.paper-dots,\nhtml.pen-dark .inkpad.paper-dots {\nbackground-image: radial-gradient(circle, rgb(255 255 255 / 0.24) 1.35px, transparent 1.5px) !important;\n}\nhtml[data-darkreader-scheme=\"dark\"] .inkpad canvas,\nhtml[data-darkreader-scheme=\"dark\"] .inkpad .figure-bg,\nhtml.pen-dark .inkpad canvas,\nhtml.pen-dark .inkpad .figure-bg {\nfilter: invert(0.92) hue-rotate(180deg);\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks path,\nhtml.pen-dark .marks path {\nstroke: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks text,\nhtml.pen-dark .marks text {\nfill: #f87171;\n}\nhtml[data-darkreader-scheme=\"dark\"] .marks .mark-note,\nhtml.pen-dark .marks .mark-note {\ncolor: #fca5a5;\ntext-shadow: 0 0 4px #17191e, 0 0 4px #17191e, 0 0 4px #17191e;\n}\n:where(body:has(pen-header)) {\nmax-width: 840px;\nmargin: 0 auto;\npadding: 0 1rem 3rem;\nfont-family: system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;\nline-height: 1.55;\nbackground: #fff;\ncolor: #000;\n}\n:where(body:has(pen-header) section) {\nmargin: 1.35rem 0;\n}\n:where(body:has(pen-header) h2) {\nfont-size: 1.06rem;\nmargin: 0 0 0.35rem;\n}\nhtml.pen-easy-reading body {\nletter-spacing: 0.03em;\nword-spacing: 0.12em;\nline-height: 1.78 !important;\n}\nhtml.pen-hide-marks .inkpad .marks {\ndisplay: none !important;\n}\nhtml[data-pen-tool=\"eraser\"] .inkpad:not(.readonly) {\nborder-style: dashed;\n}\nhtml[data-pen-tool=\"eraser\"] .inkpad:not(.readonly) canvas {\ncursor: cell;\n}\n.pen-timeup-bar {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 40;\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.6rem;\npadding: 0.7rem 1rem;\nborder: 2px solid #b91c1c;\nborder-radius: 10px;\nbackground: #fef2f2;\ncolor: #000;\nfont-weight: 600;\n}\n.pen-live-hint {\nmargin: 0.4rem 0 0.15rem;\n}\n.pen-live-hint-btn {\nmin-height: 32px;\nfont-size: 0.85rem;\n}\n.pen-live-hint-list {\ndisplay: flex;\nflex-direction: column;\ngap: 0.4rem;\nmargin-top: 0.4rem;\n}\n.pen-live-hint-list:empty {\ndisplay: none;\n}\n.pen-live-hint-item {\npadding: 0.45rem 0.75rem;\nborder-left: 3px solid #1e3a8a;\nborder-radius: 6px;\nbackground: rgb(30 58 138 / 0.05);\n}\n.pen-live-hint-num {\ndisplay: block;\nfont-size: 0.75rem;\nfont-weight: 700;\ntext-transform: uppercase;\nletter-spacing: 0.04em;\nopacity: 0.75;\n}\n.pen-manual-card {\nwidth: min(640px, 100%);\nmax-height: 88vh;\npadding: 0.95rem 1.1rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.6rem;\n}\n.pen-manual-list {\noverflow-y: auto;\ndisplay: flex;\nflex-direction: column;\ngap: 0.75rem;\npadding-right: 0.25rem;\n}\n.pen-manual-item {\npadding: 0.65rem 0.75rem;\nborder: 1px solid rgb(0 0 0 / 0.22);\nborder-radius: 8px;\ndisplay: flex;\nflex-direction: column;\ngap: 0.45rem;\n}\n.pen-manual-grid {\ndisplay: grid;\ngrid-template-columns: 1.4fr 1fr;\ngap: 0.5rem;\n}\n.pen-manual-textarea {\nmin-height: 54px;\nresize: vertical;\n}\n.pen-header-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nflex: none;\n}\n.pen-ref-card {\nwidth: min(680px, 100%);\nmax-height: 84vh;\npadding: 0.95rem 1.15rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.6rem;\n}\n.pen-ref-body {\noverflow-y: auto;\nline-height: 1.55;\n}\n.pen-inline-review,\n.pen-inline-review-bar {\nmargin: 0.55rem 0 1rem;\npadding: 0.75rem 0.9rem;\nborder: 2px dashed #1e3a8a;\nborder-radius: 10px;\nbackground: #f8fafc;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.5rem;\n}\n.pen-inline-review-head {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.45rem;\n}\n.pen-inline-review-title {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.35rem;\n}\n.pen-stamp-row {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.25rem;\n}\n.pen-stamp-note {\nmin-height: 28px;\nwidth: 9.5rem;\nmax-width: 44vw;\npadding: 0 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 6px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.8rem;\n}\n.pen-stamp-label {\nfont-size: 0.8rem;\nfont-weight: 600;\nopacity: 0.75;\n}\n.pen-stamp-row .pen-sheet-btn {\nmin-height: 28px;\npadding: 0 0.48rem;\nfont-size: 0.82rem;\n}\n.pen-stamp-pick[aria-pressed=\"true\"] {\nbackground: #dc2626 !important;\ncolor: #fff !important;\nborder-color: #dc2626 !important;\n}\n.inkpad.pen-stamp-armed {\nborder: 2px solid #dc2626 !important;\ncursor: crosshair;\n}\n.inkpad.pen-stamp-armed canvas {\ncursor: crosshair !important;\n}\n.pen-replay-btn {\ndisplay: none;\nposition: absolute;\nright: 8px;\nbottom: 8px;\nz-index: 4;\nmin-height: 28px;\npadding: 0 0.55rem;\nborder: 1px solid rgb(0 0 0 / 0.4);\nborder-radius: 999px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.78rem;\nfont-weight: 600;\ncursor: pointer;\n}\n.inkpad.readonly:not(.pen-pad-empty) .pen-replay-btn {\ndisplay: inline-flex;\nalign-items: center;\n}\n.hwq-eink .pen-replay-btn {\ndisplay: none !important;\n}\nhtml.pen-exam-mode .pen-hint-box,\nhtml.pen-exam-mode .pen-selfcheck-box,\nhtml.pen-exam-mode .pen-ai-menu,\nhtml.pen-exam-mode .pen-manual-menu,\nhtml.pen-exam-mode .pen-submit-utils .pen-boox-btn[title*=\"Copy\"],\nhtml.pen-exam-mode .pen-submit-utils .pen-boox-btn[title*=\"ChatGPT\"] {\ndisplay: none !important;\n}\n.hwq-eink .pen-timeup-bar,\n.hwq-eink .pen-live-hint-item,\n.hwq-eink .pen-ref-card,\n.hwq-eink .pen-inline-review,\n.hwq-eink .pen-inline-review-bar,\n.hwq-eink .pen-manual-card {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\nhtml.pen-dark .pen-timeup-bar,\nhtml.pen-dark .pen-live-hint-item,\nhtml.pen-dark .pen-ref-card,\nhtml.pen-dark .pen-inline-review,\nhtml.pen-dark .pen-inline-review-bar,\nhtml.pen-dark .pen-manual-card,\nhtml.pen-dark .pen-manual-item {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\npen-input {\ndisplay: block;\nmargin: 0.5rem 0;\n}\n.pen-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-bottom: 0.3rem;\n}\n.pen-tools[hidden] {\ndisplay: none;\n}\n.pen-sr {\nposition: absolute;\nwidth: 1px;\nheight: 1px;\noverflow: hidden;\nclip-path: inset(50%);\nwhite-space: nowrap;\n}\npen-toolbar {\nposition: fixed;\nright: 6px;\ntop: 50%;\ntransform: translateY(-50%);\nz-index: 30;\n}\nhtml.pen-rail-left pen-toolbar {\nright: auto;\nleft: 6px;\n}\n.pen-has-toolbar body {\npadding-right: 54px;\n}\nhtml.pen-has-toolbar.pen-rail-left body {\npadding-right: 0;\npadding-left: 54px;\n}\n.pen-bar {\nposition: relative;\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\npadding: 0.28rem;\nbackground: rgb(255 255 255 / 0.96);\nborder: 1px solid rgb(15 23 42 / 0.24);\nborder-radius: 12px;\nbox-shadow: 0 6px 20px rgb(15 23 42 / 0.1);\n}\n.pen-bar > button {\nposition: relative;\nmin-height: 36px;\nmin-width: 36px;\npadding: 0;\ndisplay: grid;\nplace-items: center;\nfont-size: 1rem;\nline-height: 1;\n}\n.pen-ink-dot {\nposition: absolute;\nright: 4px;\nbottom: 4px;\nwidth: 7px;\nheight: 7px;\nborder-radius: 999px;\nbackground: var(--active-ink, #1f2937);\nborder: 1px solid #fff;\npointer-events: none;\n}\n.pen-bar > .pen-nav-btn {\nfont-size: 0.72rem;\nfont-weight: 700;\nletter-spacing: -0.02em;\npadding: 0 0.25rem;\n}\n.pen-bar > .pen-nav-btn[hidden],\n.pen-bar > .pen-timer-pill[hidden] {\ndisplay: none;\n}\n.pen-bar > .pen-timer-pill {\nmin-height: 26px;\nfont-size: 0.68rem;\nfont-variant-numeric: tabular-nums;\nfont-weight: 600;\npadding: 0 0.2rem;\n}\n.pen-bar > .pen-timer-pill.pen-timer-low {\nbackground: #b91c1c;\ncolor: #fff;\nborder-color: #b91c1c;\n}\n.pen-nav-popover {\nposition: absolute;\nright: calc(100% + 8px);\ntop: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.28rem;\nwidth: min(270px, calc(100vw - 74px));\nmax-height: 66vh;\noverflow-y: auto;\npadding: 0.5rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\nhtml.pen-rail-left .pen-nav-popover,\nhtml.pen-rail-left .pen-popover {\nright: auto;\nleft: calc(100% + 8px);\n}\n.pen-nav-popover[hidden] {\ndisplay: none;\n}\n.pen-nav-head {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.4rem;\nfont-size: 0.8rem;\ntext-transform: uppercase;\nletter-spacing: 0.04em;\nopacity: 0.78;\npadding: 0.05rem 0.2rem 0.1rem;\n}\n.pen-nav-total-pts {\nfont-weight: 700;\nfont-size: 0.74rem;\ntext-transform: none;\nletter-spacing: 0;\n}\n.pen-nav-progress {\nheight: 5px;\nborder-radius: 999px;\nbackground: rgb(0 0 0 / 0.12);\noverflow: hidden;\nmargin-bottom: 0.15rem;\n}\n.pen-nav-progress-fill {\nheight: 100%;\nwidth: 0%;\nbackground: #000;\n}\n.pen-nav-list {\ndisplay: flex;\nflex-direction: column;\ngap: 0.22rem;\n}\n.pen-nav-jump {\nmargin-top: 0.2rem;\nmin-height: 34px;\npadding: 0 0.55rem;\nfont-size: 0.82rem;\nfont-weight: 600;\ntext-align: center;\n}\n.pen-nav-jump[hidden] {\ndisplay: none;\n}\n.pen-nav-item {\ndisplay: flex;\nalign-items: center;\ngap: 0.45rem;\nmin-height: 36px;\npadding: 0.2rem 0.55rem;\ntext-align: left;\nfont-size: 0.86rem;\n}\n.pen-nav-icon {\nflex: none;\nwidth: 1.1em;\ntext-align: center;\nfont-weight: 700;\n}\n.pen-nav-text {\nflex: 1;\nmin-width: 0;\noverflow: hidden;\ntext-overflow: ellipsis;\nwhite-space: nowrap;\n}\n.pen-nav-pts {\nflex: none;\nfont-size: 0.74rem;\nopacity: 0.7;\n}\n.pen-ink-controls {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.4rem;\npadding: 0.15rem 0.1rem;\n}\n.pen-swatches,\n.pen-nibs {\ndisplay: flex;\ngap: 0.28rem;\nalign-items: center;\n}\n.pen-popover .pen-swatch {\nmin-width: 28px;\nmin-height: 28px;\npadding: 0;\nborder-radius: 999px;\nbackground: var(--swatch, #1f2937);\nborder: 2px solid transparent;\nbox-shadow: inset 0 0 0 2px #fff;\n}\n.pen-popover .pen-swatch[aria-pressed=\"true\"] {\nborder-color: #000;\nbackground: var(--swatch, #1f2937);\n}\n.pen-popover .pen-nib {\nmin-width: 28px;\nmin-height: 28px;\npadding: 0;\ntext-align: center;\nfont-size: 0.78rem;\nfont-weight: 700;\n}\n.pen-paper-row {\ndisplay: flex;\ngap: 0.22rem;\n}\n.pen-paper-row[hidden] {\ndisplay: none;\n}\n.pen-popover .pen-paper-btn {\nflex: 1;\nmin-height: 30px;\npadding: 0 0.35rem;\ntext-align: center;\nfont-size: 0.78rem;\nfont-weight: 600;\n}\n.pen-rubric {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.3rem;\nmargin: 0 0 0.35rem;\n}\n.pen-rubric-item {\ndisplay: inline-flex;\nalign-items: center;\ngap: 0.25rem;\nfont: inherit;\nfont-size: 0.8rem;\nline-height: 1.3;\npadding: 0.18rem 0.54rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 999px;\nbackground: rgb(0 0 0 / 0.03);\ncolor: inherit;\n}\n.pen-rubric-btn {\ncursor: pointer;\n}\n.pen-rubric-btn:disabled {\ncursor: default;\n}\n.pen-rubric-item::before {\ncontent: \"☐\";\nfont-size: 0.86em;\nopacity: 0.7;\n}\n.pen-rubric-btn[aria-pressed=\"true\"]:not([data-met]) {\nborder-color: #1e3a8a;\nbackground: #eff6ff;\ncolor: #1e3a8a;\nfont-weight: 600;\n}\n.pen-rubric-btn[aria-pressed=\"true\"]:not([data-met])::before {\ncontent: \"☑\";\nopacity: 1;\n}\n.pen-rubric-item[data-met=\"true\"] {\nborder-color: #15803d;\nbackground: #f0fdf4;\ncolor: #15803d;\nfont-weight: 600;\n}\n.pen-rubric-item[data-met=\"true\"]::before {\ncontent: \"✓\";\nopacity: 1;\n}\n.pen-rubric-item[data-met=\"false\"] {\nborder-style: dashed;\nopacity: 0.72;\n}\n.pen-hint-box {\nmargin: 0.35rem 0 0.2rem;\npadding: 0.28rem 0.65rem;\nborder: 1px dashed rgb(0 0 0 / 0.35);\nborder-radius: 8px;\nbackground: rgb(0 0 0 / 0.02);\nfont-size: 0.9rem;\n}\n.pen-hint-box summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-hint-box[open] summary {\nmargin-bottom: 0.25rem;\n}\n.pen-confirm-bar {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 0.45rem 0;\npadding: 0.6rem 0.85rem;\nborder: 2px solid #b45309;\nborder-radius: 10px;\nbackground: #fffbeb;\ncolor: #000;\n}\n.pen-confirm-text {\nfont-weight: 600;\nfont-size: 0.92rem;\n}\n.pen-confirm-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\n}\n.pen-confirm-send,\n.pen-retry-missed {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\nfont-size: 0.9rem;\nfont-weight: 600;\ncursor: pointer;\n}\n.pen-prev-feedback {\nmargin: 0.4rem 0 0.9rem;\npadding: 0.35rem 0.7rem;\nborder: 1px dashed rgb(0 0 0 / 0.45);\nborder-left: 4px solid #b45309;\nborder-radius: 8px;\nbackground: rgb(0 0 0 / 0.025);\nfont-size: 0.92rem;\n}\n.pen-prev-feedback summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-timer-row {\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-timer-row .pen-timer-toggle {\nflex: 1;\n}\n.pen-timer-row .pen-timer-reset {\nflex: none;\nmin-width: 34px;\npadding: 0;\ntext-align: center;\n}\n.pen-timer-row .pen-timer-reset[hidden] {\ndisplay: none;\n}\n.pen-menu-sep {\nborder: none;\nborder-top: 1px solid rgb(0 0 0 / 0.18);\nmargin: 0.15rem 0;\n}\n.pen-popover {\nposition: absolute;\nright: calc(100% + 8px);\nbottom: 0;\ndisplay: flex;\nflex-direction: column;\ngap: 0.28rem;\nwidth: min(260px, calc(100vw - 68px));\nmax-height: 82vh;\noverflow-y: auto;\npadding: 0.45rem;\nbackground: #fff;\nborder: 1px solid #000;\nborder-radius: 10px;\n}\n.pen-menu-sec {\nfont-size: 0.72rem;\nfont-weight: 700;\ntext-transform: uppercase;\nletter-spacing: 0.05em;\nopacity: 0.65;\npadding: 0.2rem 0.15rem 0;\n}\n.pen-menu-sec:first-child {\npadding-top: 0;\n}\n.pen-menu-grid {\ndisplay: grid;\ngrid-template-columns: 1fr 1fr;\ngap: 0.25rem;\n}\n.pen-menu-grid button {\nmin-height: 34px;\npadding: 0 0.4rem;\nfont-size: 0.82rem;\ntext-align: left;\noverflow: hidden;\ntext-overflow: ellipsis;\n}\n.pen-bar > .pen-timer-pill.pen-timer-idle {\nopacity: 0.72;\n}\n.pen-say-row {\nmargin-bottom: 0.35rem;\n}\n.pen-say-btn {\nmin-height: 34px;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-popover[hidden] {\ndisplay: none;\n}\n.pen-popover button {\nmin-height: 36px;\npadding: 0 0.65rem;\ntext-align: left;\nfont-size: 0.9rem;\nwhite-space: nowrap;\n}\n.pen-has-toolbar pen-input .pen-tools {\ndisplay: none;\n}\n.inkpad.pen-pad-active {\nborder-color: #000;\nbox-shadow: 0 0 0 1px #000;\n}\n.inkpad.pen-pad-flagged {\nborder-style: dashed;\nborder-width: 2px;\n}\n.inkpad.pen-pad-empty::after {\ncontent: attr(data-empty-hint);\nposition: absolute;\nleft: 12px;\ntop: 10px;\nz-index: 2;\npointer-events: none;\nfont-size: 0.85rem;\ncolor: rgb(100 116 139 / 0.65);\n}\n.inkpad:has(.pen-pad-pts).pen-pad-empty::after {\nleft: 68px;\n}\n.pen-pad-pts {\nposition: absolute;\nleft: 8px;\ntop: 8px;\nz-index: 4;\npointer-events: none;\npadding: 0.12rem 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont-size: 0.74rem;\nfont-weight: 700;\n}\n.pen-pad-top-actions {\nposition: absolute;\ntop: 6px;\nright: 6px;\nz-index: 4;\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-pad-btn {\nmin-width: 32px;\nmin-height: 32px;\npadding: 0 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.45);\nborder-radius: 8px;\nbackground: rgb(255 255 255 / 0.92);\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\nline-height: 1;\ncursor: pointer;\n}\n.pen-more-in {\nposition: absolute;\nright: 6px;\nbottom: 6px;\nz-index: 4;\nfont-weight: 700;\n}\n.pen-pin-in,\n.pen-flag-in {\nfont-size: 0.84rem;\n}\n.pen-pin-in[aria-pressed=\"true\"],\n.pen-flag-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\n.inkpad.readonly .pen-pad-btn,\n.inkpad.readonly .pen-pad-top-actions {\ndisplay: none;\n}\n.pen-pinned {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 28;\ndisplay: flex;\nalign-items: flex-start;\ngap: 0.5rem;\npadding: 0.45rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-pinned-body {\nflex: 1;\nmin-width: 0;\nmax-height: 28vh;\noverflow-y: auto;\nfont-size: 0.95rem;\nline-height: 1.4;\n}\n.pen-pinned-body > :first-child {\nmargin-top: 0;\n}\n.pen-pinned-body > :last-child {\nmargin-bottom: 0;\n}\n.pen-unpin {\nflex: none;\nmin-width: 32px;\nmin-height: 32px;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button,\n.pen-bar button,\npen-submit button {\nmin-height: 36px;\nmin-width: 36px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\ncursor: pointer;\n}\n.pen-tools button[aria-pressed=\"true\"],\n.pen-bar button[aria-pressed=\"true\"],\npen-submit .pen-send {\nbackground: #000;\ncolor: #fff;\n}\n.pen-tools button:disabled,\n.pen-bar button:disabled {\nopacity: 0.4;\n}\npen-submit {\ndisplay: block;\nmargin: 1.5rem 0 1rem;\n}\n.pen-submit-shell {\ndisplay: flex;\nflex-direction: column;\ngap: 0.55rem;\n}\n.pen-submit-primary {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.65rem;\n}\npen-submit .pen-send {\nmin-height: 44px;\npadding: 0 1.25rem;\nfont-weight: 700;\nfont-size: 1rem;\n}\n.pen-readiness {\nfont-size: 0.88rem;\npadding: 0.22rem 0.6rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 999px;\n}\n.pen-readiness[hidden] {\ndisplay: none;\n}\n.pen-readiness-all {\nfont-weight: 600;\nborder-color: #15803d;\ncolor: #15803d;\n}\n.pen-submit-utils {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nalign-items: center;\n}\n.pen-boox-btn {\nfont-size: 0.84rem;\nmin-height: 32px;\npadding: 0 0.6rem;\nborder-color: rgb(0 0 0 / 0.35);\n}\n.pen-boox-file[hidden] {\ndisplay: none;\n}\n.pen-review-bar {\ndisplay: flex;\nflex-direction: column;\ngap: 0.5rem;\nmargin: 0.4rem 0 0.7rem;\npadding: 0.65rem 0.85rem;\nborder: 1px solid rgb(15 23 42 / 0.2);\nborder-radius: 12px;\nbackground: #f8fafc;\nbox-shadow: 0 1px 3px rgb(15 23 42 / 0.05);\n}\n.pen-review-top {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nwidth: 100%;\n}\n.pen-score-bar {\nwidth: 100%;\nheight: 7px;\nborder-radius: 999px;\nbackground: rgb(15 23 42 / 0.1);\noverflow: hidden;\n}\n.pen-score-bar-fill {\nheight: 100%;\nborder-radius: 999px;\nbackground: #0f172a;\n}\n.pen-score-bar-fill[data-band=\"high\"] { background: #15803d; }\n.pen-score-bar-fill[data-band=\"mid\"] { background: #b45309; }\n.pen-score-bar-fill[data-band=\"low\"] { background: #b91c1c; }\n.pen-q-time {\nfont-size: 0.78rem;\nfont-weight: 600;\nfont-variant-numeric: tabular-nums;\npadding: 0.1rem 0.45rem;\nborder-radius: 999px;\nborder: 1px solid rgb(0 0 0 / 0.22);\nbackground: rgb(0 0 0 / 0.03);\n}\n.pen-self-summary {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\npadding: 0.55rem 0.8rem;\nborder: 1px solid rgb(15 23 42 / 0.24);\nborder-radius: 10px;\nbackground: #f8fafc;\n}\n.pen-self-summary[hidden] {\ndisplay: none;\n}\n.pen-self-summary-counts {\nfont-size: 0.88rem;\nfont-weight: 700;\n}\n.pen-self-summary-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\n}\n.pen-review-pills,\n.pen-review-filters {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nalign-items: center;\n}\n.pen-review-pill {\nfont-size: 0.84rem;\nfont-weight: 700;\npadding: 0.16rem 0.55rem;\nborder-radius: 999px;\nborder: 1px solid currentColor;\n}\n.pen-score-pill {\nfont-size: 0.88rem;\nfont-weight: 800;\npadding: 0.18rem 0.65rem;\nborder-radius: 999px;\nbackground: #000;\ncolor: #fff;\nborder: 1px solid #000;\n}\n.pen-time-pill {\nfont-size: 0.82rem;\nfont-weight: 600;\nfont-variant-numeric: tabular-nums;\npadding: 0.16rem 0.5rem;\nborder-radius: 999px;\nborder: 1px solid rgb(0 0 0 / 0.35);\nbackground: #fff;\ncolor: #000;\n}\n.pen-feedback-head {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.4rem;\nmargin-bottom: 0.25rem;\n}\n.pen-feedback-head .pen-badge,\n.pen-feedback-head .pen-verdict {\nmargin-bottom: 0;\n}\n.pen-pts-earned {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.12rem 0.48rem;\nborder-radius: 999px;\nborder: 1px solid rgb(0 0 0 / 0.28);\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-flag-tag {\nfont-size: 0.78rem;\nfont-weight: 700;\npadding: 0.1rem 0.42rem;\nborder-radius: 999px;\nborder: 1px solid currentColor;\nopacity: 0.8;\n}\n.pen-review-pill[data-verdict=\"correct\"] {\ncolor: #15803d;\nbackground: #f0fdf4;\n}\n.pen-review-pill[data-verdict=\"partial\"] {\ncolor: #b45309;\nbackground: #fffbeb;\n}\n.pen-review-pill[data-verdict=\"incorrect\"] {\ncolor: #b91c1c;\nbackground: #fef2f2;\n}\n.pen-review-pill[data-verdict=\"blank\"] {\ncolor: #475569;\nbackground: #f8fafc;\n}\n.pen-filter-btn {\nmin-height: 30px;\npadding: 0 0.6rem;\nfont-size: 0.82rem;\n}\n.pen-filter-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml[data-review-filter=\"needs-work\"] .pen-feedback[data-verdict=\"correct\"],\nhtml[data-review-filter=\"flagged\"] .pen-feedback:not([data-flagged=\"true\"]) {\nopacity: 0.36;\n}\n.pen-feedback {\nmargin: 0.55rem 0 1.15rem;\npadding: 0.75rem 1rem;\nborder: 1px solid rgb(0 0 0 / 0.22);\nborder-left: 4px solid #1e3a8a;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\nline-height: 1.58;\n}\n.pen-feedback[data-verdict=\"correct\"] {\nborder-left-color: #15803d;\n}\n.pen-feedback[data-verdict=\"partial\"] {\nborder-left-color: #b45309;\n}\n.pen-feedback[data-verdict=\"incorrect\"] {\nborder-left-color: #b91c1c;\n}\n.pen-feedback[data-verdict=\"blank\"] {\nborder-left-color: #475569;\n}\n.pen-feedback p {\nmargin: 0.35rem 0;\n}\n.pen-badge {\ndisplay: inline-block;\npadding: 0.16rem 0.6rem;\nmargin-bottom: 0.3rem;\nborder: 1px solid #1e3a8a;\nborder-radius: 999px;\nbackground: #eff6ff;\ncolor: #1e3a8a;\nfont-size: 0.85rem;\nfont-weight: 700;\n}\n.pen-badge[data-verdict=\"correct\"],\n.pen-verdict[data-verdict=\"correct\"] {\ncolor: #15803d;\nborder-color: #15803d;\nbackground: #f0fdf4;\n}\n.pen-badge[data-verdict=\"partial\"],\n.pen-verdict[data-verdict=\"partial\"] {\ncolor: #b45309;\nborder-color: #b45309;\nbackground: #fffbeb;\n}\n.pen-badge[data-verdict=\"incorrect\"],\n.pen-verdict[data-verdict=\"incorrect\"] {\ncolor: #b91c1c;\nborder-color: #b91c1c;\nbackground: #fef2f2;\n}\n.pen-badge[data-verdict=\"blank\"],\n.pen-verdict[data-verdict=\"blank\"] {\ncolor: #475569;\nborder-color: #475569;\nbackground: #f8fafc;\n}\n.pen-verdict {\ndisplay: inline-block;\npadding: 0.12rem 0.52rem;\nmargin-bottom: 0.25rem;\nborder: 1px solid currentColor;\nborder-radius: 999px;\nfont-size: 0.85rem;\n}\n.pen-read-line {\nfont-size: 0.9rem;\npadding: 0.28rem 0 0.35rem;\nmargin: 0.15rem 0 0.45rem;\nborder-bottom: 1px solid rgb(0 0 0 / 0.1);\ncolor: rgb(0 0 0 / 0.78);\n}\n.pen-md > :first-child {\nmargin-top: 0.2rem;\n}\n.pen-md > :last-child {\nmargin-bottom: 0.2rem;\n}\n.pen-md-h {\nmargin: 0.7rem 0 0.25rem;\nfont-size: 1rem;\nfont-weight: 700;\n}\n.pen-md ul,\n.pen-md ol {\nmargin: 0.35rem 0 0.45rem;\npadding-left: 1.35rem;\n}\n.pen-md li {\nmargin: 0.18rem 0;\n}\n.pen-md blockquote {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.7rem;\nborder-left: 3px solid #000;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-md code {\npadding: 0.08rem 0.3rem;\nborder-radius: 4px;\nbackground: rgb(0 0 0 / 0.07);\nfont-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\nfont-size: 0.9em;\n}\n.pen-code {\nmargin: 0.45rem 0;\npadding: 0.55rem 0.75rem;\noverflow-x: auto;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-radius: 6px;\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-code code {\npadding: 0;\nbackground: none;\n}\n.pen-table-wrap {\nmargin: 0.45rem 0;\noverflow-x: auto;\n}\n.pen-md table {\nborder-collapse: collapse;\nwidth: 100%;\nfont-size: 0.92rem;\n}\n.pen-md th,\n.pen-md td {\npadding: 0.32rem 0.55rem;\nborder: 1px solid #000;\ntext-align: left;\n}\n.pen-md th {\nfont-weight: 700;\nbackground: rgb(0 0 0 / 0.05);\n}\n.pen-disclosure {\nmargin: 0.45rem 0;\npadding: 0.35rem 0.65rem;\nborder: 1px dashed #000;\nborder-radius: 6px;\n}\n.pen-disclosure summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 30px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-disclosure[open] summary {\nmargin-bottom: 0.3rem;\n}\n.pen-next-time {\nfont-weight: 600;\n}\n.pen-summary-card {\nmargin: 0.65rem 0;\npadding: 0.7rem 0.9rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-review-hub {\ndisplay: flex;\nflex-direction: column;\ngap: 0.45rem;\nmargin: 0.6rem 0;\n}\n.pen-feedback-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\n}\n.pen-export-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\npadding-top: 0.45rem;\nborder-top: 1px dashed rgb(0 0 0 / 0.16);\n}\n.pen-export-actions .pen-sheet-btn {\nmin-height: 32px;\npadding: 0 0.62rem;\nfont-size: 0.84rem;\nborder-color: rgb(0 0 0 / 0.35);\n}\n.pen-followup {\nmargin-top: 0.75rem;\npadding: 0.7rem 0.85rem;\nborder: 1px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-followup-thread {\ndisplay: flex;\nflex-direction: column;\ngap: 0.5rem;\n}\n.pen-followup-thread:not(:empty) {\nmargin-bottom: 0.6rem;\n}\n.pen-followup-msg {\npadding: 0.45rem 0.65rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 8px;\n}\n.pen-followup-student {\nbackground: rgb(0 0 0 / 0.04);\n}\n.pen-followup-who {\ndisplay: block;\nfont-size: 0.78rem;\nfont-weight: 700;\ntext-transform: uppercase;\nletter-spacing: 0.03em;\nopacity: 0.75;\nmargin-bottom: 0.15rem;\n}\n.pen-followup-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\n}\n.pen-followup-input {\nflex: 1 1 14rem;\nmin-width: 0;\nmin-height: 40px;\npadding: 0 0.65rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-followup-status {\nmargin: 0.35rem 0 0;\nfont-size: 0.88rem;\n}\n.pen-grader-backdrop {\nposition: fixed;\ninset: 0;\nz-index: 60;\ndisplay: grid;\nplace-items: center;\npadding: 1rem;\nbackground: rgb(0 0 0 / 0.5);\n}\n.pen-grader-card {\nwidth: min(440px, 100%);\npadding: 1rem 1.1rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.65rem;\n}\n.pen-grader-head {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\n}\n.pen-grader-note {\nmargin: 0;\nfont-size: 0.88rem;\nline-height: 1.4;\n}\n.pen-grader-label {\ndisplay: flex;\nflex-direction: column;\ngap: 0.25rem;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-grader-label[hidden] {\ndisplay: none;\n}\n.pen-grader-field {\nmin-height: 38px;\npadding: 0.35rem 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-weight: 400;\n}\n.pen-grader-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.45rem;\nmargin-top: 0.2rem;\n}\n.pen-grader-actions .pen-send {\nmin-height: 38px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\ncursor: pointer;\n}\n.pen-misread {\nmin-height: 32px;\npadding: 0 0.3rem;\nborder: none;\nbackground: none;\ncolor: #000;\nfont: inherit;\ntext-decoration: underline;\ncursor: pointer;\n}\n.pen-misread-form {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.5rem;\nmargin: 0.4rem 0;\n}\n.pen-misread-form input,\n.pen-misread-form button {\nmin-height: 44px;\npadding: 0 0.6rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-misread-form input {\nflex: 1 1 12rem;\nmin-width: 0;\n}\n.pen-inline {\ndisplay: inline;\n}\n.pen-save {\nmargin: 0.4rem 0 0;\nfont-size: 0.9em;\n}\n.pen-save:empty {\ndisplay: none;\n}\n.pen-save-warn {\npadding: 0.4rem 0.7rem;\nborder: 2px solid #000;\nborder-radius: 8px;\nfont-weight: bold;\n}\n.pen-away {\nposition: fixed;\nleft: 12px;\nright: 12px;\nbottom: 12px;\nz-index: 30;\nmargin: 0;\npadding: 12px 16px;\nbackground: #fff;\ncolor: #000;\nborder: 2px solid #000;\nborder-radius: 8px;\n}\n.hwq-eink .inkpad {\nbackground-color: #ffffff;\nborder-color: #000;\n}\n.hwq-eink .inkpad.paper-ruled {\nbackground-image: linear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.35) calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-grid {\nbackground-image:\nlinear-gradient(to bottom, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px)),\nlinear-gradient(to right, transparent calc(var(--line) - 1px), rgb(0 0 0 / 0.32) calc(var(--line) - 1px));\n}\n.hwq-eink .inkpad.paper-dots {\nbackground-image: radial-gradient(circle, rgb(0 0 0 / 0.55) 1.35px, transparent 1.5px);\n}\n.hwq-eink .pen-bar,\n.hwq-eink .pen-review-bar,\n.hwq-eink .pen-header-card {\nbox-shadow: none !important;\nborder-color: #000 !important;\nbackground: #fff !important;\n}\n.hwq-eink .pen-score-bar {\nbackground: #fff;\nborder: 1px solid #000;\n}\n.hwq-eink .pen-score-bar-fill {\nbackground: #000 !important;\n}\n.hwq-eink .pen-self-summary,\n.hwq-eink .pen-q-time,\n.hwq-eink .pen-stamp-note,\n.hwq-eink .pen-rubric-btn[aria-pressed=\"true\"]:not([data-met]) {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-rubric-btn[aria-pressed=\"true\"]:not([data-met]) {\nborder-width: 2px;\n}\n.hwq-eink .pen-feedback,\n.hwq-eink .pen-badge,\n.hwq-eink .pen-verdict,\n.hwq-eink .pen-review-bar,\n.hwq-eink .pen-review-pill,\n.hwq-eink .pen-time-pill,\n.hwq-eink .pen-readiness,\n.hwq-eink .pen-pad-btn,\n.hwq-eink .pen-pad-pts,\n.hwq-eink .pen-pts-earned,\n.hwq-eink .pen-rubric-item,\n.hwq-eink .pen-hint-box,\n.hwq-eink .pen-confirm-bar,\n.hwq-eink .pen-prev-feedback,\n.hwq-eink .pen-boox-btn {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-score-pill,\n.hwq-eink .pen-confirm-send,\n.hwq-eink .pen-retry-missed {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\n.hwq-eink .pen-rubric-item[data-met=\"true\"] {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\nborder-width: 2px;\n}\n.hwq-eink .pen-nav-progress {\nbackground: #fff;\nborder: 1px solid #000;\n}\n.hwq-eink .pen-read-line {\ncolor: #000;\nborder-bottom-color: #000;\n}\n.hwq-eink .pen-feedback[data-verdict=\"partial\"],\n.hwq-eink .pen-feedback[data-verdict=\"incorrect\"] {\nborder-left-width: 6px;\n}\n.hwq-eink .pen-bar > .pen-timer-pill.pen-timer-low,\n.hwq-eink .pen-filter-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\nhtml.pen-dark body {\nbackground: #111317 !important;\ncolor: #e6e8ec !important;\n}\nhtml.pen-dark .pen-bar,\nhtml.pen-dark .pen-popover,\nhtml.pen-dark .pen-nav-popover,\nhtml.pen-dark .pen-pinned,\nhtml.pen-dark .pen-feedback,\nhtml.pen-dark .pen-summary-card,\nhtml.pen-dark .pen-followup,\nhtml.pen-dark .pen-grader-card,\nhtml.pen-dark .pen-review-bar,\nhtml.pen-dark .pen-confirm-bar,\nhtml.pen-dark .pen-prev-feedback,\nhtml.pen-dark .pen-hint-box,\nhtml.pen-dark .pen-sheet-card,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar,\nhtml[data-darkreader-scheme=\"dark\"] .pen-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-nav-popover,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pinned {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-followup-input,\nhtml.pen-dark .pen-grader-field,\nhtml.pen-dark .pen-disclosure,\nhtml.pen-dark .pen-badge,\nhtml.pen-dark .pen-verdict,\nhtml.pen-dark .pen-review-pill,\nhtml.pen-dark .pen-time-pill,\nhtml.pen-dark .pen-q-time,\nhtml.pen-dark .pen-pts-earned,\nhtml.pen-dark .pen-rubric-item,\nhtml.pen-dark .pen-readiness,\nhtml.pen-dark .pen-pad-pts,\nhtml.pen-dark .pen-stamp-note {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-self-summary {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-score-bar {\nbackground: rgb(255 255 255 / 0.14) !important;\n}\nhtml.pen-dark .pen-score-bar-fill[data-band=\"high\"] { background: #4ade80 !important; }\nhtml.pen-dark .pen-score-bar-fill[data-band=\"mid\"] { background: #fbbf24 !important; }\nhtml.pen-dark .pen-score-bar-fill[data-band=\"low\"] { background: #f87171 !important; }\nhtml.pen-dark .pen-feedback[data-verdict=\"correct\"] { border-left-color: #4ade80 !important; }\nhtml.pen-dark .pen-feedback[data-verdict=\"partial\"] { border-left-color: #fbbf24 !important; }\nhtml.pen-dark .pen-feedback[data-verdict=\"incorrect\"] { border-left-color: #f87171 !important; }\nhtml.pen-dark .pen-badge[data-verdict=\"correct\"],\nhtml.pen-dark .pen-verdict[data-verdict=\"correct\"],\nhtml.pen-dark .pen-review-pill[data-verdict=\"correct\"],\nhtml.pen-dark .pen-rubric-item[data-met=\"true\"],\nhtml.pen-dark .pen-progress-pill {\ncolor: #4ade80 !important;\nborder-color: #22c55e !important;\nbackground: rgb(34 197 94 / 0.14) !important;\n}\nhtml.pen-dark .pen-badge[data-verdict=\"partial\"],\nhtml.pen-dark .pen-verdict[data-verdict=\"partial\"],\nhtml.pen-dark .pen-review-pill[data-verdict=\"partial\"],\nhtml.pen-dark .pen-conf-warn,\nhtml.pen-dark .pen-conf-warn-pill {\ncolor: #fbbf24 !important;\nborder-color: #f59e0b !important;\nbackground: rgb(245 158 11 / 0.14) !important;\n}\nhtml.pen-dark .pen-badge[data-verdict=\"incorrect\"],\nhtml.pen-dark .pen-verdict[data-verdict=\"incorrect\"],\nhtml.pen-dark .pen-review-pill[data-verdict=\"incorrect\"] {\ncolor: #f87171 !important;\nborder-color: #ef4444 !important;\nbackground: rgb(239 68 68 / 0.14) !important;\n}\nhtml.pen-dark .pen-rubric-btn[aria-pressed=\"true\"]:not([data-met]) {\ncolor: #93c5fd !important;\nborder-color: #60a5fa !important;\nbackground: rgb(59 130 246 / 0.16) !important;\n}\nhtml.pen-dark .pen-score-pill,\nhtml.pen-dark .pen-confirm-send,\nhtml.pen-dark .pen-retry-missed,\nhtml.pen-dark .pen-nav-progress-fill {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-nav-progress {\nbackground: rgb(255 255 255 / 0.14) !important;\n}\nhtml.pen-dark .pen-read-line {\ncolor: #b8c0cc !important;\nborder-bottom-color: #363c48 !important;\n}\nhtml.pen-dark .pen-md code,\nhtml.pen-dark .pen-code,\nhtml.pen-dark .pen-md blockquote,\nhtml.pen-dark .pen-md th,\nhtml.pen-dark .pen-followup-student {\nbackground: rgb(255 255 255 / 0.06) !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-pad-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-pad-btn {\nbackground: rgb(28 31 38 / 0.9) !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button,\nhtml.pen-dark .pen-unpin,\nhtml.pen-dark .pen-sheet-btn,\nhtml.pen-dark .pen-boox-btn,\nhtml.pen-dark .pen-filter-btn,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button,\nhtml[data-darkreader-scheme=\"dark\"] .pen-unpin,\nhtml[data-darkreader-scheme=\"dark\"] .pen-boox-btn {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-bar button[aria-pressed=\"true\"],\nhtml.pen-dark .pen-pin-in[aria-pressed=\"true\"],\nhtml.pen-dark .pen-flag-in[aria-pressed=\"true\"],\nhtml.pen-dark .pen-filter-btn[aria-pressed=\"true\"],\nhtml.pen-dark pen-submit .pen-send,\nhtml[data-darkreader-scheme=\"dark\"] .pen-bar button[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-pin-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] .pen-flag-in[aria-pressed=\"true\"],\nhtml[data-darkreader-scheme=\"dark\"] pen-submit .pen-send {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-popover .pen-swatch {\nbackground: var(--swatch, #1f2937) !important;\nbox-shadow: inset 0 0 0 2px #1c1f26 !important;\n}\nhtml.pen-dark .pen-popover .pen-swatch[aria-pressed=\"true\"] {\nborder-color: #e6e8ec !important;\n}\npen-header {\ndisplay: block;\nmargin: 0.75rem 0 1.25rem;\n}\n.pen-header-card {\npadding: 0.85rem 1rem;\nborder: 1px solid rgb(0 0 0 / 0.25);\nborder-bottom: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-header-top {\ndisplay: flex;\nalign-items: flex-start;\njustify-content: space-between;\ngap: 0.75rem;\n}\n.pen-header-titles {\nflex: 1;\nmin-width: 0;\n}\n.pen-header-title {\nmargin: 0;\nfont-size: 1.38rem;\nline-height: 1.25;\n}\n.pen-header-sub {\nmargin: 0.28rem 0 0;\nfont-size: 0.93rem;\nopacity: 0.8;\n}\n.pen-header-bottom {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem 1rem;\nmargin-top: 0.65rem;\n}\n.pen-header-meta {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\n}\n.pen-meta-chip {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.14rem 0.52rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\n}\n.pen-student-wrap {\ndisplay: inline-flex;\nalign-items: center;\ngap: 0.4rem;\nfont-size: 0.88rem;\nfont-weight: 600;\n}\n.pen-student-input {\nmin-height: 32px;\nwidth: 13rem;\nmax-width: 55vw;\npadding: 0.15rem 0.5rem;\nborder: none;\nborder-bottom: 1.5px solid #000;\nbackground: transparent;\ncolor: inherit;\nfont: inherit;\nfont-weight: 400;\n}\n.pen-focus-hidden {\ndisplay: none !important;\n}\n.pen-focus-bar {\ndisplay: flex;\nalign-items: center;\njustify-content: space-between;\ngap: 0.5rem;\nmargin: 1rem 0 1.25rem;\npadding: 0.55rem 0.75rem;\nborder: 1px solid rgb(0 0 0 / 0.28);\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-focus-pos {\nfont-size: 0.9rem;\nfont-weight: 700;\n}\n.pen-confidence {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.35rem;\nmargin: 0.38rem 0 0.15rem;\n}\n.pen-confidence-label {\nfont-size: 0.82rem;\nopacity: 0.75;\nmargin-right: 0.15rem;\n}\n.pen-conf-btn {\nmin-height: 30px;\npadding: 0 0.6rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.82rem;\ncursor: pointer;\n}\n.pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\nfont-weight: 600;\n}\n.pen-conf-btn:disabled {\nopacity: 0.5;\ncursor: default;\n}\n.pen-conf-tag {\nfont-size: 0.78rem;\nfont-weight: 600;\npadding: 0.1rem 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 999px;\n}\n.pen-conf-warn,\n.pen-conf-warn-pill {\nfont-size: 0.8rem;\nfont-weight: 700;\npadding: 0.14rem 0.52rem;\nborder: 1px solid #b45309;\nborder-radius: 999px;\nbackground: #fffbeb;\ncolor: #b45309;\n}\n.pen-progress-pill {\nfont-size: 0.82rem;\nfont-weight: 700;\npadding: 0.16rem 0.55rem;\nborder: 1px solid #15803d;\nborder-radius: 999px;\nbackground: #f0fdf4;\ncolor: #15803d;\n}\n.hwq-eink .pen-header-card,\n.hwq-eink .pen-meta-chip,\n.hwq-eink .pen-focus-bar,\n.hwq-eink .pen-conf-btn,\n.hwq-eink .pen-conf-tag,\n.hwq-eink .pen-conf-warn,\n.hwq-eink .pen-conf-warn-pill,\n.hwq-eink .pen-progress-pill {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml.pen-dark .pen-header-card,\nhtml.pen-dark .pen-focus-bar {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-meta-chip,\nhtml.pen-dark .pen-conf-btn,\nhtml.pen-dark .pen-conf-tag {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-student-input {\nborder-bottom-color: #6b7280 !important;\n}\nhtml.pen-dark .pen-conf-btn[aria-pressed=\"true\"] {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n.pen-backup-row {\ndisplay: flex;\ngap: 0.25rem;\n}\n.pen-backup-row button {\nflex: 1;\ntext-align: center;\npadding: 0 0.35rem;\nfont-size: 0.84rem;\n}\n.pen-selfcheck-box {\nmargin: 0.4rem 0 0.15rem;\npadding: 0.38rem 0.68rem;\nborder: 1px solid rgb(0 0 0 / 0.32);\nborder-radius: 8px;\nbackground: rgb(0 0 0 / 0.02);\n}\n.pen-selfcheck-box summary {\ncursor: pointer;\nfont-weight: 600;\nfont-size: 0.88rem;\nmin-height: 28px;\ndisplay: flex;\nalign-items: center;\n}\n.pen-selfcheck-marks {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.35rem;\nmargin-top: 0.5rem;\npadding-top: 0.45rem;\nborder-top: 1px dashed rgb(0 0 0 / 0.2);\n}\n.pen-self-btn {\nmin-height: 32px;\npadding: 0 0.65rem;\nborder: 1px solid rgb(0 0 0 / 0.4);\nborder-radius: 999px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.84rem;\ncursor: pointer;\n}\n.pen-self-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\nfont-weight: 600;\n}\n.pen-reflection {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.4rem;\nmargin-top: 0.55rem;\npadding-top: 0.5rem;\nborder-top: 1px dashed rgb(0 0 0 / 0.2);\nfont-size: 0.88rem;\n}\n.pen-reflection-label {\nfont-weight: 600;\nwhite-space: nowrap;\n}\n.pen-reflection-input {\nflex: 1 1 14rem;\nmin-width: 0;\nmin-height: 34px;\npadding: 0.2rem 0.55rem;\nborder: 1px solid rgb(0 0 0 / 0.3);\nborder-radius: 6px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\n}\n.pen-scratch-card {\nwidth: min(760px, 100%);\nmax-height: 90vh;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 12px;\nbackground: #fff;\ncolor: #000;\ndisplay: flex;\nflex-direction: column;\ngap: 0.55rem;\n}\n.pen-scratch-sub {\nfont-size: 0.84rem;\nopacity: 0.72;\n}\n.pen-scratch-tools {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.3rem;\n}\n.pen-scratch-tools button[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\n.pen-scratch-body {\noverflow-y: auto;\nflex: 1;\nmin-height: 220px;\n}\n.hwq-eink .pen-selfcheck-box,\n.hwq-eink .pen-self-btn,\n.hwq-eink .pen-reflection-input,\n.hwq-eink .pen-scratch-card {\nbackground: #fff;\ncolor: #000;\nborder-color: #000;\n}\n.hwq-eink .pen-self-btn[aria-pressed=\"true\"],\n.hwq-eink .pen-scratch-tools button[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml.pen-dark .pen-selfcheck-box,\nhtml.pen-dark .pen-scratch-card {\nbackground: #1c1f26 !important;\ncolor: #e6e8ec !important;\nborder-color: #363c48 !important;\n}\nhtml.pen-dark .pen-self-btn,\nhtml.pen-dark .pen-reflection-input {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-self-btn[aria-pressed=\"true\"],\nhtml.pen-dark .pen-scratch-tools button[aria-pressed=\"true\"] {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n.pen-sheet-card {\nmargin-top: 0.75rem;\npadding: 0.85rem 1rem;\nborder: 2px solid #000;\nborder-radius: 10px;\nbackground: #fff;\ncolor: #000;\n}\n.pen-sheet-head {\ndisplay: flex;\nalign-items: baseline;\njustify-content: space-between;\ngap: 0.5rem;\nfont-size: 1.05rem;\n}\n.pen-sheet-count {\nfont-size: 0.85rem;\npadding: 0.15rem 0.5rem;\nborder: 1px solid #000;\nborder-radius: 999px;\n}\n.pen-sheet-msg {\nmargin: 0.4rem 0 0.65rem;\nfont-size: 0.92rem;\n}\n.pen-sheet-actions {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.4rem;\nmargin-bottom: 0.6rem;\n}\n.pen-sheet-btn {\ndisplay: inline-flex;\nalign-items: center;\nmin-height: 36px;\npadding: 0 0.75rem;\nborder: 1px solid #000;\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.9rem;\ntext-decoration: none;\ncursor: pointer;\n}\n.pen-sheet-btn[hidden] {\ndisplay: none;\n}\n.pen-sheet-skipped {\nmargin: 0.25rem 0 0.6rem;\nfont-size: 0.88rem;\n}\n.pen-sheet-item {\nmargin: 0.7rem 0;\npadding-top: 0.5rem;\nborder-top: 1px solid #000;\n}\n.pen-sheet-item-head {\nfont-weight: 700;\nfont-size: 0.95rem;\nmargin-bottom: 0.3rem;\n}\n.pen-sheet-typed {\nmargin: 0.25rem 0 0.4rem;\nwhite-space: pre-wrap;\n}\n.pen-sheet-fig {\nmargin: 0.35rem 0 0;\n}\n.pen-sheet-fig img {\ndisplay: block;\nmax-width: 100%;\nborder: 1px solid #000;\nborder-radius: 6px;\n}\n.pen-sheet-details {\nmargin-top: 0.65rem;\n}\n.pen-sheet-details summary {\ncursor: pointer;\nfont-weight: 600;\nmin-height: 32px;\n}\n.pen-top-progress {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nheight: 3px;\nbackground: rgb(0 0 0 / 0.06);\nz-index: 35;\npointer-events: none;\n}\n.pen-top-progress-fill {\nheight: 100%;\nwidth: 0;\nbackground: #0f172a;\ntransition: width 180ms ease;\n}\n.hwq-eink .pen-top-progress {\nbackground: transparent;\n}\n.hwq-eink .pen-top-progress-fill {\nbackground: #000;\ntransition: none;\n}\nhtml.pen-dark .pen-top-progress {\nbackground: rgb(255 255 255 / 0.08);\n}\nhtml.pen-dark .pen-top-progress-fill {\nbackground: #e6e8ec;\n}\nhtml[data-pen-tool=\"space\"] .inkpad:not(.readonly) {\ncursor: ns-resize;\n}\n.pen-review-chips {\ndisplay: flex;\nflex-wrap: wrap;\ngap: 0.3rem;\nwidth: 100%;\npadding-top: 0.4rem;\nborder-top: 1px solid rgb(0 0 0 / 0.12);\n}\n.pen-review-chip {\nmin-height: 28px;\npadding: 0 0.5rem;\nborder: 1px solid currentColor;\nborder-radius: 999px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.8rem;\nfont-weight: 700;\ncursor: pointer;\n}\n.pen-review-chip[data-verdict=\"correct\"] { color: #15803d; background: #f0fdf4; }\n.pen-review-chip[data-verdict=\"partial\"] { color: #b45309; background: #fffbeb; }\n.pen-review-chip[data-verdict=\"incorrect\"] { color: #b91c1c; background: #fef2f2; }\n.pen-review-chip[data-verdict=\"blank\"] { color: #475569; background: #f8fafc; }\n.hwq-eink .pen-review-chip {\ncolor: #000 !important;\nbackground: #fff !important;\nborder-color: #000 !important;\n}\nhtml.pen-dark .pen-review-chip {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #4b5563 !important;\n}\nhtml.pen-dark .pen-review-chip[data-verdict=\"correct\"] { color: #4ade80 !important; border-color: #22c55e !important; background: rgb(34 197 94 / 0.14) !important; }\nhtml.pen-dark .pen-review-chip[data-verdict=\"partial\"] { color: #fbbf24 !important; border-color: #f59e0b !important; background: rgb(245 158 11 / 0.14) !important; }\nhtml.pen-dark .pen-review-chip[data-verdict=\"incorrect\"] { color: #f87171 !important; border-color: #ef4444 !important; background: rgb(239 68 68 / 0.14) !important; }\n.pen-manual-rubric {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.35rem 0.65rem;\npadding: 0.35rem 0.5rem;\nborder: 1px dashed rgb(0 0 0 / 0.25);\nborder-radius: 8px;\nfont-size: 0.84rem;\n}\n.pen-manual-rubric-item {\ndisplay: inline-flex;\nalign-items: center;\ngap: 0.3rem;\ncursor: pointer;\n}\nhtml.pen-wide body,\nhtml.pen-wide main {\nmax-width: none !important;\nwidth: auto !important;\n}\nhtml.pen-wide.pen-has-toolbar body {\npadding-left: 1rem;\npadding-right: 4.1rem;\n}\nhtml.pen-wide.pen-has-toolbar.pen-rail-left body {\npadding-left: 4.1rem;\npadding-right: 1rem;\n}\n.pen-wide-btn[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\n}\nhtml.pen-dark .pen-wide-btn[aria-pressed=\"true\"] {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\n}\n.hwq-eink .inkpad {\ncontain: layout paint;\n}\n.hwq-eink .inkpad canvas {\nwill-change: contents;\n}\nhtml.pen-task-pane body,\nhtml.pen-task-pane main {\nmax-width: none !important;\nwidth: auto !important;\npadding-top: 3.7rem !important;\n}\nhtml.pen-task-pane.pen-has-toolbar body {\npadding-left: 1rem;\npadding-right: 4.1rem;\n}\nhtml.pen-task-pane.pen-has-toolbar.pen-rail-left body {\npadding-left: 4.1rem;\npadding-right: 1rem;\n}\nhtml.pen-task-pane pen-header,\nhtml.pen-task-pane .gallery,\nhtml.pen-task-pane .note {\ndisplay: none !important;\n}\nhtml.pen-task-pane section > h2,\nhtml.pen-task-pane section > h3,\nhtml.pen-task-pane section > p,\nhtml.pen-task-pane .pen-rubric,\nhtml.pen-task-pane .pen-feedback {\nmax-width: 860px;\n}\nhtml.pen-task-pane .inkpad.has-figure,\nhtml.pen-wide .inkpad.has-figure {\nmax-width: 900px;\n}\nhtml.pen-task-pane.pen-task-prompt-hidden section > :not(pen-input):not(.pen-feedback):not(.pen-prev-feedback):not(.pen-inline-review) {\ndisplay: none !important;\n}\n.pen-task-topbar {\nposition: fixed;\ntop: 0;\nleft: 0;\nright: 0;\nz-index: 32;\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\njustify-content: space-between;\ngap: 0.45rem;\npadding: 0.4rem 0.75rem;\nbackground: #fff;\ncolor: #000;\nborder-bottom: 2px solid #000;\n}\n.pen-task-back {\nmin-height: 36px;\npadding: 0 0.85rem;\nborder: 1px solid #000;\nborder-radius: 999px;\nbackground: #000;\ncolor: #fff;\nfont: inherit;\nfont-size: 0.88rem;\nfont-weight: 700;\ncursor: pointer;\nwhite-space: nowrap;\n}\n.pen-task-title {\ndisplay: flex;\nalign-items: baseline;\ngap: 0.45rem;\nmin-width: 0;\nflex: 1;\nfont-size: 0.92rem;\n}\n.pen-task-label {\noverflow: hidden;\ntext-overflow: ellipsis;\nwhite-space: nowrap;\nopacity: 0.82;\n}\n.pen-task-pts {\nflex: none;\nfont-size: 0.76rem;\nfont-weight: 700;\npadding: 0.1rem 0.45rem;\nborder: 1px solid rgb(0 0 0 / 0.35);\nborder-radius: 999px;\n}\n.pen-task-timer {\nfont-variant-numeric: tabular-nums;\n}\n.pen-task-timer[hidden] {\ndisplay: none;\n}\n.pen-task-timer.pen-timer-low {\nbackground: #b91c1c !important;\ncolor: #fff !important;\nborder-color: #b91c1c !important;\n}\n.pen-meta-exam {\nbackground: #0f172a;\ncolor: #fff;\nborder-color: #0f172a;\n}\n.hwq-eink .pen-meta-exam {\nbackground: #000 !important;\ncolor: #fff !important;\n}\nhtml.pen-dark .pen-meta-exam {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-task-pts {\nborder-color: #4b5563 !important;\n}\n.pen-task-actions {\ndisplay: flex;\nflex-wrap: wrap;\nalign-items: center;\ngap: 0.3rem;\n}\n.pen-task-chip {\nmin-height: 34px;\npadding: 0 0.6rem;\nborder: 1px solid rgb(0 0 0 / 0.4);\nborder-radius: 8px;\nbackground: #fff;\ncolor: #000;\nfont: inherit;\nfont-size: 0.84rem;\nfont-weight: 600;\ncursor: pointer;\n}\n.pen-task-chip[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\n.pen-task-chip:disabled {\nopacity: 0.35;\ncursor: default;\n}\n.pen-expand-in[aria-pressed=\"true\"] {\nbackground: #000;\ncolor: #fff;\nborder-color: #000;\n}\nhtml.pen-dark .pen-task-topbar {\nbackground: #181b21 !important;\ncolor: #e6e8ec !important;\nborder-bottom-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-task-back {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\nhtml.pen-dark .pen-task-chip {\nbackground: #232730 !important;\ncolor: #e6e8ec !important;\nborder-color: #3d4452 !important;\n}\nhtml.pen-dark .pen-task-chip[aria-pressed=\"true\"] {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n.inkpad.readonly .pen-more-in,\n.inkpad.readonly .pen-pin-in {\ndisplay: none;\n}\n.inkpad.readonly .pen-pad-top-actions {\ndisplay: flex;\n}\n.pen-expand-in {\nfont-size: 0.78rem;\nfont-weight: 700;\npadding: 0 0.55rem;\nwhite-space: nowrap;\n}\nhtml.pen-task-pane .pen-pin-in {\ndisplay: none;\n}\n.pen-task-finish {\nbackground: #000 !important;\ncolor: #fff !important;\nborder-color: #000 !important;\nfont-weight: 700;\n}\nhtml.pen-dark .pen-task-finish {\nbackground: #e6e8ec !important;\ncolor: #111317 !important;\nborder-color: #e6e8ec !important;\n}\n@media print {\n.pen-top-progress,\n.pen-review-chips,\n.pen-wide-btn,\n.pen-task-topbar,\n.pen-expand-in,\npen-toolbar,\n.pen-tools,\n.pen-pad-btn,\n.pen-pad-top-actions,\n.pen-pinned,\n.pen-hint-box,\n.pen-confirm-bar,\n.pen-prev-feedback,\n.pen-sheet-actions,\n.pen-save,\n.pen-boox-btn,\n.pen-readiness,\n.pen-submit-utils,\n.pen-review-filters,\n.pen-followup-form,\n.pen-review-hub,\n.pen-feedback-actions,\n.pen-export-actions,\n.pen-self-summary,\n.pen-grader-backdrop,\n.pen-focus-bar,\n.pen-focus-btn,\n.pen-confidence,\n.pen-selfcheck-box,\n.pen-live-hint,\n.pen-timeup-bar,\n.pen-ref-btn,\n.pen-replay-btn,\n.pen-inline-review,\n.pen-inline-review-bar,\n.pen-reflection-empty,\npen-submit .pen-send {\ndisplay: none !important;\n}\n.pen-focus-hidden {\ndisplay: block !important;\n}\n.inkpad.pen-pad-empty::after {\ncontent: none !important;\n}\n.inkpad,\n.pen-feedback,\n.pen-summary-card,\n.pen-review-bar {\nbreak-inside: avoid;\npage-break-inside: avoid;\n}\n.pen-has-toolbar body,\nhtml.pen-has-toolbar.pen-rail-left body {\npadding-right: 0 !important;\npadding-left: 0 !important;\n}\n}";
 const WORDS = {
 exportFailed: "Your handwriting could not be prepared for hand-in. Your work is still here: keep writing or try handing in again.",
 correct: "✓ Correct",
@@ -3122,6 +3148,7 @@ jumpNext: "Jump to",
 handInRevisions: "Hand in revisions",
 paperRuled: "Ruled",
 paperGrid: "Grid",
+paperDots: "Dots",
 paperBlank: "Blank",
 focusOn: "🎯 Focus mode",
 focusOff: "📄 Scroll all",
@@ -3178,17 +3205,42 @@ const flagged = new Set();
 const confidences = new Map();
 const reflections = new Map();
 const selfChecks = new Map();
+const selfRubrics = new Map();
+const fieldTimes = new Map();
 const liveHints = new Map();
+let activeFieldId = null;
+let activeFieldSince = 0;
 let scratchpadData = null;
 let studentName = "";
 let attempts = [];
+function flushFieldTime() {
+if (!activeFieldId || !activeFieldSince || inputsLocked || graded) {
+activeFieldSince = 0;
+return;
+}
+const now = Date.now();
+const deltaSec = Math.min(120, Math.max(0, (now - activeFieldSince) / 1000));
+if (deltaSec >= 0.5) {
+fieldTimes.set(activeFieldId, Math.round(((fieldTimes.get(activeFieldId) || 0) + deltaSec) * 10) / 10);
+}
+activeFieldSince = now;
+}
+function noteFieldActivity(id) {
+if (!id || inputsLocked || graded) return;
+flushFieldTime();
+activeFieldId = id;
+activeFieldSince = Date.now();
+}
 const saver = saveLater({
 write: () => {
+flushFieldTime();
 const pens = Object.fromEntries(penInputs().map((p) => [p.name, p.pad.toJSON()]));
 const papers = Object.fromEntries(penInputs().filter((p) => !p.figureSource).map((p) => [p.name, p.pad.paper]));
 const confidence = Object.fromEntries([...confidences.entries()].filter(([, v]) => Boolean(v)));
 const reflectionObj = Object.fromEntries([...reflections.entries()].filter(([, v]) => Boolean(v?.trim())));
 const selfCheckObj = Object.fromEntries([...selfChecks.entries()].filter(([, v]) => Boolean(v)));
+const selfRubricObj = Object.fromEntries([...selfRubrics.entries()].map(([k, set]) => [k, [...set].sort((a, b) => a - b)]).filter(([, arr]) => arr.length));
+const fieldTimeObj = Object.fromEntries([...fieldTimes.entries()].map(([k, v]) => [k, Math.round(v)]).filter(([, v]) => v > 0));
 saved = {
 pens,
 papers,
@@ -3197,6 +3249,8 @@ confidence,
 flagged: [...flagged],
 reflections: reflectionObj,
 selfChecks: selfCheckObj,
+selfRubrics: selfRubricObj,
+fieldTimes: fieldTimeObj,
 scratchpad: scratchpadData,
 studentName,
 attempts,
@@ -3266,10 +3320,13 @@ const pens = penInputs().map((p) => {
 const ink = p.pad.toPNG();
 const rubric = rubricOf(p);
 const conf = confidences.get(p.name);
+const ticked = selfRubrics.get(p.name);
+const selfRubric = ticked?.size ? [...ticked].sort((a, b) => a - b) : null;
 return {
 q: { id: p.name, points: pointsOf(p), showPoints: p.hasAttribute("points"), ...(rubric ? { rubric } : {}) },
 label: labelOf(p),
 ...(conf ? { confidence: conf } : {}),
+...(selfRubric ? { selfRubric } : {}),
 inks: ink ? [{ id: p.name, ...ink }] : [],
 };
 });
@@ -3306,7 +3363,7 @@ function lock(locked) {
 inputsLocked = locked;
 for (const p of penInputs()) p.pad.setReadOnly(locked);
 for (const c of controls()) c.disabled = locked;
-document.querySelectorAll(".pen-confidence button").forEach((b) => (b.disabled = locked));
+document.querySelectorAll(".pen-confidence button, .pen-rubric-btn").forEach((b) => (b.disabled = locked));
 document.querySelectorAll(".pen-tools").forEach((t) => (t.hidden = locked));
 document.querySelectorAll("pen-submit .pen-send").forEach((b) => (b.disabled = locked));
 }
@@ -3343,12 +3400,14 @@ maxPts && (g.verdict || (typeof g.points === "number" && g.points > 0))
 ? h("span", { class: "pen-pts-earned" }, `${g.points} / ${maxPts} pt${maxPts === 1 ? "" : "s"}`)
 : null;
 const flagChip = flagged.has(name) ? h("span", { class: "pen-flag-tag" }, "⚑") : null;
+const qSecs = Math.round(fieldTimes.get(name) || 0);
+const timeChip = qSecs >= 5 && typeof formatTime === "function" ? h("span", { class: "pen-q-time" }, `⏱ ${formatTime(qSecs)}`) : null;
 const confVal = confidences.get(name);
 const isConfMistake = confVal === "sure" && (g.verdict === "incorrect" || g.verdict === "partial");
 const confChip = confVal
 ? h("span", { class: `pen-conf-tag${isConfMistake ? " pen-conf-warn" : ""}` }, isConfMistake ? `⚠ ${word("sure")}` : word(confVal))
 : null;
-const headRow = heading || earnedChip || confChip || flagChip ? h("div", { class: "pen-feedback-head" }, heading, earnedChip, confChip, flagChip) : null;
+const headRow = heading || earnedChip || timeChip || confChip || flagChip ? h("div", { class: "pen-feedback-head" }, heading, earnedChip, timeChip, confChip, flagChip) : null;
 const bodyText = g.feedback || g.comment;
 after.after(
 h(
@@ -3456,15 +3515,23 @@ typeof downloadBackup === "function"
 : null;
 const actionsRow = h(
 "div",
+{ class: "pen-review-hub" },
+h(
+"div",
 { class: "pen-feedback-actions" },
 retryMissedBtn,
 h("button", { type: "button", class: "pen-again", onclick: reopen }, word("again")),
 freshRetakeBtn,
 practiceWeakBtn,
+),
+h(
+"div",
+{ class: "pen-export-actions" },
 copyNotesBtn,
 saveNotesBtn,
 exportGradedBtn,
 h("button", { type: "button", class: "pen-sheet-btn", onclick: () => window.print() }, word("printReview")),
+),
 );
 const followUp = tutorAvailable("auto") ? followUpPanel() : null;
 status(reviewBar, reportNode, summaryNode, actionsRow, followUp);
@@ -3760,6 +3827,7 @@ status(h("p", {}, word("empty")));
 return null;
 }
 const mine = ++run;
+if (typeof flushFieldTime === "function") flushFieldTime();
 if (!tutorAvailable("auto")) {
 showToPass(targetItems, "No grading server is connected to this page. Copy or download your answer sheet below and paste it into any AI chat (Claude, ChatGPT, Gemini) for teacher feedback.");
 return null;
@@ -4048,7 +4116,11 @@ const sc = typeof selfChecks !== "undefined" ? selfChecks.get(f.id) : "";
 if (!g && !sc) continue;
 const verdict = g?.verdict || sc || "";
 const statusLabel = g?.badge || (verdict ? word(verdict) : "Reviewed");
-const ptsLabel = g && f.points && (g.verdict || g.points > 0) ? ` (${g.points}/${f.points} pts)` : "";
+const qSecs = Math.round((typeof fieldTimes !== "undefined" ? fieldTimes.get(f.id) : 0) || f.timeSeconds || 0);
+const metaDetails = [];
+if (g && f.points && (g.verdict || g.points > 0)) metaDetails.push(`${g.points}/${f.points} pts`);
+if (qSecs >= 5) metaDetails.push(`⏱ ${formatTime(qSecs)}`);
+const ptsLabel = metaDetails.length ? ` (${metaDetails.join(" · ")})` : "";
 const conf = typeof confidences !== "undefined" ? confidences.get(f.id) : "";
 const confLabel = conf ? ` [${word(conf)}]` : "";
 const flagLabel = f.flagged ? " ⚑" : "";
@@ -4079,6 +4151,7 @@ function downloadStudyNotes() {
 downloadTextFile(`${slugOfTitle()}-review.md`, buildStudyNotesMarkdown(), "text/markdown;charset=utf-8");
 }
 function exportState() {
+flushFieldTime();
 const pens = Object.fromEntries(penInputs().map((p) => [p.name, p.pad.toJSON()]));
 const papers = Object.fromEntries(penInputs().filter((p) => !p.figureSource).map((p) => [p.name, p.pad.paper]));
 const typed = Object.fromEntries(controlNames().map((name) => [name, controlValue(name)]));
@@ -4094,6 +4167,8 @@ confidence: Object.fromEntries(confidences),
 flagged: [...flagged],
 reflections: Object.fromEntries(reflections),
 selfChecks: Object.fromEntries(selfChecks),
+selfRubrics: Object.fromEntries([...selfRubrics.entries()].map(([k, set]) => [k, [...set].sort((a, b) => a - b)]).filter(([, arr]) => arr.length)),
+fieldTimes: Object.fromEntries([...fieldTimes.entries()].map(([k, v]) => [k, Math.round(v)]).filter(([, v]) => v > 0)),
 scratchpad: scratchpadData,
 attempts,
 followUps,
@@ -4126,6 +4201,24 @@ for (const [k, v] of Object.entries(data.selfChecks)) {
 if (v === "correct" || v === "partial" || v === "incorrect") selfChecks.set(k, v);
 }
 }
+selfRubrics.clear();
+if (data.selfRubrics && typeof data.selfRubrics === "object") {
+for (const [k, arr] of Object.entries(data.selfRubrics)) {
+if (Array.isArray(arr)) {
+const nums = arr.map(Number).filter((n) => Number.isInteger(n) && n >= 1);
+if (nums.length) selfRubrics.set(k, new Set(nums));
+}
+}
+}
+fieldTimes.clear();
+activeFieldId = null;
+activeFieldSince = 0;
+if (data.fieldTimes && typeof data.fieldTimes === "object") {
+for (const [k, v] of Object.entries(data.fieldTimes)) {
+const n = Number(v);
+if (Number.isFinite(n) && n > 0) fieldTimes.set(k, n);
+}
+}
 scratchpadData = data.scratchpad && typeof data.scratchpad === "object" ? data.scratchpad : null;
 studentName = typeof data.studentName === "string" ? data.studentName : "";
 attempts = Array.isArray(data.attempts) ? data.attempts.slice(-10) : [];
@@ -4137,8 +4230,8 @@ const snap = data.pens?.[p.name];
 if (snap && Array.isArray(snap.strokes)) {
 p.pad.strokes = snap.strokes.map((s) => ({ ...s, points: Array.isArray(s.points) ? s.points.map((pt) => [...pt]) : [] }));
 if (Number.isFinite(snap.height) && snap.height >= 100 && !p.figureSource) p.pad.height = snap.height;
-p.pad.history = [];
-p.pad.future = [];
+p.pad.undoStack = [];
+p.pad.redoStack = [];
 p.pad.layout();
 p.pad.redraw();
 }
@@ -4146,6 +4239,8 @@ const paper = data.papers?.[p.name];
 if (paper && !p.figureSource && typeof p.pad.setPaper === "function") p.pad.setPaper(paper);
 p.querySelectorAll(".pen-conf-btn").forEach((b) => b.setAttribute("aria-pressed", String(confidences.get(p.name) === b.dataset.level)));
 p.querySelectorAll(".pen-self-btn").forEach((b) => b.setAttribute("aria-pressed", String(selfChecks.get(p.name) === b.dataset.self)));
+const ticked = selfRubrics.get(p.name);
+p.querySelectorAll(".pen-rubric-btn").forEach((b, idx) => b.setAttribute("aria-pressed", String(Boolean(ticked?.has(idx + 1)))));
 }
 graded = data.graded && typeof data.graded === "object" ? data.graded : null;
 if (graded) {
@@ -4191,6 +4286,7 @@ save();
 };
 const paperBtns = [
 ["grid", word("paperGrid")],
+["dots", word("paperDots")],
 ["ruled", word("paperRuled")],
 ["blank", word("paperBlank")],
 ].map(([p, label]) => h("button", { type: "button", class: "pen-sheet-btn", "data-paper": p, "aria-pressed": String(pad.paper === p), onclick: setPaper(p) }, label));
@@ -4297,6 +4393,9 @@ if (verdictSel.value === "correct") ptsInput.value = String(maxPts);
 else if (verdictSel.value === "partial") ptsInput.value = String(Math.round((maxPts / 2) * 10) / 10);
 else if (verdictSel.value === "incorrect" || verdictSel.value === "blank") ptsInput.value = "0";
 });
+const stampNoteInput = pen
+? h("input", { type: "text", class: "pen-stamp-note", placeholder: "Optional stamp note…", maxlength: "40" })
+: null;
 if (pen) {
 const onPadClick = (e) => {
 if (!armed || armed.id !== f.id) return;
@@ -4310,7 +4409,9 @@ const cx = Math.max(40, Math.min(paperW - 40, ((e.clientX - rect.left) / rect.wi
 const cy = Math.max(40, Math.min(paperH - 40, ((e.clientY - rect.top) / rect.height) * paperH));
 const w = armed.kind === "circle" ? 110 : 62;
 const hUnit = armed.kind === "circle" ? 90 : 62;
-draftMarks[f.id].push({ kind: armed.kind, x: Math.round(cx - w / 2), y: Math.round(cy - hUnit / 2), w, h: hUnit });
+const note = stampNoteInput?.value?.trim().slice(0, 40) || "";
+draftMarks[f.id].push({ kind: armed.kind, x: Math.round(cx - w / 2), y: Math.round(cy - hUnit / 2), w, h: hUnit, ...(note ? { note } : {}) });
+if (stampNoteInput && note) stampNoteInput.value = "";
 pen.pad.setMarks(draftMarks[f.id]);
 };
 pen.pad.el.addEventListener("click", onPadClick, true);
@@ -4333,6 +4434,7 @@ h("span", { class: "pen-stamp-label" }, "Tap pad to stamp:"),
 ].map(([kind, sym]) =>
 h("button", { type: "button", class: "pen-sheet-btn pen-stamp-pick", "data-for": f.id, "data-kind": kind, "aria-pressed": "false", onclick: pickStamp(kind) }, sym),
 ),
+stampNoteInput,
 h(
 "button",
 {
@@ -4373,12 +4475,17 @@ return { idx: idx + 1, cb, el: h("label", { class: "pen-manual-rubric-item" }, c
 const rubricRow = rubricChecks.length
 ? h("div", { class: "pen-manual-rubric" }, h("span", { class: "pen-stamp-label" }, "Rubric:"), ...rubricChecks.map((c) => c.el))
 : null;
+const studentMeta = [];
+if (f.timeSeconds >= 5) studentMeta.push(h("span", { class: "pen-q-time" }, `⏱ ${formatTime(f.timeSeconds)}`));
+const sConf = confidences.get(f.id);
+if (sConf) studentMeta.push(h("span", { class: "pen-conf-tag" }, word(sConf)));
+if (f.flagged) studentMeta.push(h("span", { class: "pen-flag-tag" }, "⚑"));
 const after = anchor.closest("label") ?? anchor;
 after.after(
 h(
 "div",
 { class: "pen-inline-review", "data-for": f.id },
-h("div", { class: "pen-inline-review-head" }, h("strong", {}, `🖍 Review #${f.index}: ${f.label}`), stampBar),
+h("div", { class: "pen-inline-review-head" }, h("div", { class: "pen-inline-review-title" }, h("strong", {}, `🖍 Review #${f.index}: ${f.label}`), ...studentMeta), stampBar),
 rubricRow,
 h("div", { class: "pen-manual-grid" }, h("label", { class: "pen-grader-label" }, "Verdict", verdictSel), h("label", { class: "pen-grader-label" }, `Points (max ${maxPts})`, ptsInput)),
 h("label", { class: "pen-grader-label" }, "Feedback", commentInput),
@@ -4429,16 +4536,34 @@ recordAttempt(graded);
 showFeedback();
 save();
 };
+const studentLoader = h("input", {
+type: "file",
+accept: "application/json,.json,.pen.json",
+hidden: true,
+onchange: async (e) => {
+const file = e.target.files?.[0];
+e.target.value = "";
+if (!file) return;
+try {
+importState(await file.text());
+openManualReview();
+} catch (err) {
+status(h("p", { role: "alert" }, `Could not load student work (${String(err?.message || "invalid file").slice(0, 100)}).`));
+}
+},
+});
 status(
 h(
 "div",
 { class: "pen-inline-review-bar" },
-h("strong", {}, "🖍 Teacher Review Mode — grade directly below each answer above, then finish here:"),
+h("strong", {}, "🖍 Teacher Review Mode — stamp & grade directly below each answer above, then finish here:"),
 h("label", { class: "pen-grader-label" }, "Overall Summary", summaryInput),
 h(
 "div",
 { class: "pen-grader-actions" },
 h("button", { type: "button", class: "pen-send", onclick: applyReview }, "✓ Finish & Save Review"),
+h("button", { type: "button", class: "pen-sheet-btn", onclick: () => studentLoader.click() }, "📂 Load student (.pen.json)"),
+studentLoader,
 h(
 "button",
 {
@@ -4738,12 +4863,21 @@ let focusIndex = 0;
 let taskPromptHidden = false;
 let pushedTaskHistory = false;
 let quietRefreshTimer = 0;
+function setAttr(el, name, val) {
+const s = String(val);
+if (el.getAttribute(name) !== s) el.setAttribute(name, s);
+}
+function setText(el, val) {
+const s = String(val);
+if (el.textContent !== s) el.textContent = s;
+}
 function scheduleQuietRefresh() {
 clearTimeout(quietRefreshTimer);
 quietRefreshTimer = setTimeout(() => {
 quietRefreshTimer = 0;
+if (penInputs().some((p) => p.pad.active)) return scheduleQuietRefresh();
 refreshTools();
-}, 350);
+}, 420);
 }
 function focusGroups() {
 return penInputs().map((p) => {
@@ -4835,13 +4969,16 @@ submitEl.classList.toggle("pen-focus-hidden", !graded && focusIndex !== groups.l
 }
 const cur = groups[focusIndex].el;
 activePad = cur.pad;
+noteFieldActivity(cur.name);
 if (!cur.pad.figure && typeof window !== "undefined") {
 const availH = Math.max(320, Math.round(window.innerHeight - (taskPromptHidden ? 110 : 210)));
 cur.pad.setMinCssHeight?.(availH);
 }
 const curLabel = labelOf(cur) || cur.name || `Question ${focusIndex + 1}`;
+const curPts = cur.hasAttribute("points") ? pointsOf(cur) : 0;
 const isFlagged = Boolean(cur.name && flagged.has(cur.name));
 const hasRef = Boolean(document.querySelector("pen-reference"));
+const showTaskTimer = timerCountdown > 0 || timerRunning || timerSeconds > 0;
 const topbar = h(
 "div",
 { id: "pen-task-topbar", class: "pen-task-topbar", role: "navigation", "aria-label": "Full-screen task controls" },
@@ -4851,10 +4988,22 @@ h(
 { class: "pen-task-title" },
 h("strong", {}, `${focusIndex + 1} / ${groups.length}`),
 h("span", { class: "pen-task-label" }, curLabel),
+curPts ? h("span", { class: "pen-task-pts" }, `${curPts} pt${curPts === 1 ? "" : "s"}`) : null,
 ),
 h(
 "div",
 { class: "pen-task-actions" },
+h(
+"button",
+{
+type: "button",
+class: "pen-task-chip pen-task-timer",
+hidden: !showTaskTimer,
+title: "Pause / resume timer",
+onclick: () => (timerRunning ? pauseTimer() : startTimer()),
+},
+`⏱ ${formatTime(timerSeconds)}`,
+),
 h(
 "button",
 {
@@ -4906,13 +5055,12 @@ window.scrollTo({ top: 0, behavior: "auto" });
 "‹ Prev",
 )
 : null,
-groups.length > 1
+groups.length > 1 && focusIndex < groups.length - 1
 ? h(
 "button",
 {
 type: "button",
 class: "pen-task-chip",
-disabled: focusIndex === groups.length - 1,
 title: "Next question (Alt+→)",
 onclick: () => {
 focusIndex = Math.min(groups.length - 1, focusIndex + 1);
@@ -4923,6 +5071,20 @@ window.scrollTo({ top: 0, behavior: "auto" });
 },
 },
 "Next ›",
+)
+: !graded && document.querySelector("pen-submit")
+? h(
+"button",
+{
+type: "button",
+class: "pen-task-chip pen-task-finish",
+title: "Exit full screen and go to Hand in",
+onclick: () => {
+exitTaskPane();
+requestAnimationFrame(() => document.querySelector("pen-submit")?.scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "center" }));
+},
+},
+"✓ Finish & Hand in",
 )
 : null,
 ),
@@ -4949,12 +5111,12 @@ window.scrollTo({ top: 0, behavior: "auto" });
 word("prevQ"),
 ),
 h("button", { type: "button", class: "pen-sheet-btn", onclick: () => exitTaskPane() }, "← All questions"),
-h(
+focusIndex < groups.length - 1
+? h(
 "button",
 {
 type: "button",
 class: "pen-sheet-btn",
-disabled: focusIndex === groups.length - 1,
 onclick: () => {
 focusIndex = Math.min(groups.length - 1, focusIndex + 1);
 taskPromptHidden = false;
@@ -4964,7 +5126,21 @@ window.scrollTo({ top: 0, behavior: "auto" });
 },
 },
 word("nextQ"),
-),
+)
+: !graded && document.querySelector("pen-submit")
+? h(
+"button",
+{
+type: "button",
+class: "pen-sheet-btn pen-task-finish",
+onclick: () => {
+exitTaskPane();
+requestAnimationFrame(() => document.querySelector("pen-submit")?.scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "center" }));
+},
+},
+"✓ Finish & Hand in",
+)
+: h("button", { type: "button", class: "pen-sheet-btn", disabled: true }, word("nextQ")),
 );
 const lastNode = groups[focusIndex].nodes.at(-1);
 if (lastNode) lastNode.after(bar);
@@ -5046,11 +5222,18 @@ refreshTimerUI();
 function refreshTimerUI() {
 const showRail = timerCountdown > 0 || timerRunning || timerSeconds > 0;
 const label = formatTime(timerSeconds);
+const low = timerCountdown > 0 && timerSeconds <= 60;
+const idle = timerCountdown > 0 && !timerRunning && timerSeconds === timerCountdown;
 document.querySelectorAll("pen-toolbar .pen-timer-pill").forEach((el) => {
-el.hidden = !showRail;
-el.textContent = label;
-el.classList.toggle("pen-timer-low", timerCountdown > 0 && timerSeconds <= 60);
-el.classList.toggle("pen-timer-idle", timerCountdown > 0 && !timerRunning && timerSeconds === timerCountdown);
+if (el.hidden !== !showRail) el.hidden = !showRail;
+setText(el, label);
+el.classList.toggle("pen-timer-low", low);
+el.classList.toggle("pen-timer-idle", idle);
+});
+document.querySelectorAll(".pen-task-timer").forEach((el) => {
+if (el.hidden !== !showRail) el.hidden = !showRail;
+setText(el, `⏱ ${label}`);
+el.classList.toggle("pen-timer-low", low);
 });
 document.querySelectorAll("pen-toolbar .pen-timer-toggle").forEach((b) => {
 b.textContent = timerRunning ? `⏸ ${label}` : timerSeconds > 0 && timerSeconds !== timerCountdown ? `▶ ${label}` : timerCountdown > 0 ? `⏱ Start ${formatTime(timerCountdown)}` : "⏱ Start timer";
@@ -5069,6 +5252,10 @@ flagged.clear();
 confidences.clear();
 reflections.clear();
 selfChecks.clear();
+selfRubrics.clear();
+fieldTimes.clear();
+activeFieldId = null;
+activeFieldSince = 0;
 liveHints.clear();
 document.getElementById("pen-timeup-bar")?.remove();
 document.querySelectorAll(".pen-live-hint-list").forEach((el) => el.replaceChildren());
@@ -5079,7 +5266,7 @@ for (const p of penInputs()) {
 p.pad.setMarks([]);
 p.pad.setReadOnly(false);
 p.pad.clear();
-p.querySelectorAll(".pen-conf-btn, .pen-self-btn").forEach((b) => b.setAttribute("aria-pressed", "false"));
+p.querySelectorAll(".pen-conf-btn, .pen-self-btn, .pen-rubric-btn").forEach((b) => b.setAttribute("aria-pressed", "false"));
 }
 for (const c of controls()) {
 if (c.type === "radio" || c.type === "checkbox") c.checked = false;
@@ -5133,8 +5320,10 @@ index: idx + 1,
 el: p,
 label: labelOf(p) || p.name,
 points: p.hasAttribute("points") ? pointsOf(p) : null,
+rubric: rubricOf(p),
 answered: !p.pad.isEmpty,
 flagged: flagged.has(p.name),
+timeSeconds: Math.round(fieldTimes.get(p.name) || 0),
 grade: graded?.grades?.[p.name] ?? null,
 }));
 const typed = controlNames().map((name, idx) => {
@@ -5145,8 +5334,10 @@ index: pens.length + idx + 1,
 el,
 label: labelOf(el) || name,
 points: el?.hasAttribute?.("points") ? pointsOf(el) : null,
+rubric: rubricOf(el),
 answered: Boolean(controlValue(name)?.trim()),
 flagged: flagged.has(name),
+timeSeconds: Math.round(fieldTimes.get(name) || 0),
 grade: graded?.grades?.[name] ?? null,
 };
 });
@@ -5173,10 +5364,17 @@ scoredCount++;
 }
 }
 const pills = [];
+let scoreBar = null;
 if (scoredCount > 0 && possiblePts > 0) {
 const pct = Math.round((earnedPts / possiblePts) * 100);
 const cleanEarned = Math.round(earnedPts * 10) / 10;
-pills.push(h("span", { class: "pen-score-pill" }, `${cleanEarned} / ${possiblePts} pts · ${pct}%`));
+const band = pct >= 80 ? "high" : pct >= 50 ? "mid" : "low";
+pills.push(h("span", { class: "pen-score-pill", "data-band": band }, `${cleanEarned} / ${possiblePts} pts · ${pct}%`));
+scoreBar = h(
+"div",
+{ class: "pen-score-bar", role: "progressbar", "aria-valuenow": String(pct), "aria-valuemin": "0", "aria-valuemax": "100", "aria-label": `Score ${pct}%` },
+h("div", { class: "pen-score-bar-fill", "data-band": band, style: `width:${pct}%` }),
+);
 }
 if (attempts.length >= 2) {
 const first = attempts[0];
@@ -5244,20 +5442,21 @@ marksBtn,
 )
 : null;
 const jumpChips =
-summaries.length > 1
+list.length > 1
 ? h(
 "div",
 { class: "pen-review-chips", role: "navigation", "aria-label": "Jump to question review" },
-...summaries.map((f) => {
+...list.map((f) => {
 const v = f.grade?.verdict || "";
 const sym = v === "correct" ? "✓" : v === "partial" ? "◐" : v === "incorrect" ? "✗" : v === "blank" ? "–" : "•";
+const timeHint = f.timeSeconds >= 5 && typeof formatTime === "function" ? ` (⏱ ${formatTime(f.timeSeconds)})` : "";
 return h(
 "button",
 {
 type: "button",
 class: "pen-review-chip",
 "data-verdict": v || "note",
-title: `Jump to #${f.index}: ${f.label}`,
+title: `Jump to #${f.index}: ${f.label}${timeHint}`,
 onclick: () => {
 const penIdx = penInputs().findIndex((p) => p.name === f.id);
 if (focusMode && penIdx >= 0) {
@@ -5273,7 +5472,7 @@ target?.scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "center" }
 }),
 )
 : null;
-return h("div", { class: "pen-review-bar" }, h("div", { class: "pen-review-pills" }, ...pills), filters, jumpChips);
+return h("div", { class: "pen-review-bar" }, h("div", { class: "pen-review-top" }, h("div", { class: "pen-review-pills" }, ...pills), filters), scoreBar, jumpChips);
 }
 const currentPad = () => (activePad && !activePad.destroyed ? activePad : penInputs()[0]?.pad ?? null);
 function taskNodesFor(el) {
@@ -5402,13 +5601,15 @@ p.redoBtn.disabled = !p.pad.canRedo || p.pad.readOnly;
 p.pad.el.classList.toggle("pen-pad-active", p.pad === pad && !p.pad.readOnly);
 p.pad.el.classList.toggle("pen-pad-empty", p.pad.isEmpty && !p.pad.readOnly && !p.figureSource);
 const isFlagged = flagged.has(p.name);
-p.flagBtn?.setAttribute("aria-pressed", String(isFlagged));
-p.flagBtn?.setAttribute("title", word(isFlagged ? "unflag" : "flag"));
+if (p.flagBtn) {
+setAttr(p.flagBtn, "aria-pressed", isFlagged);
+setAttr(p.flagBtn, "title", word(isFlagged ? "unflag" : "flag"));
+}
 if (p.expandBtn) {
 const inPane = focusMode && focusGroups()[focusIndex]?.el === p;
-p.expandBtn.setAttribute("aria-pressed", String(inPane));
-p.expandBtn.textContent = inPane ? "⤡" : "⛶";
-p.expandBtn.title = inPane ? "Exit full screen (Esc)" : "Open task full screen";
+setAttr(p.expandBtn, "aria-pressed", inPane);
+setText(p.expandBtn, inPane ? "⤡ Exit" : "⤢ Focus");
+setAttr(p.expandBtn, "title", inPane ? "Exit full screen (Esc or Back)" : "Open this task in full screen");
 }
 p.pad.el.classList.toggle("pen-pad-flagged", isFlagged);
 }
@@ -5535,6 +5736,23 @@ const ptsSuffix = totalExplicitPts > 0 ? ` · ${totalExplicitPts} pts` : "";
 const base = answeredCount === total ? `All ${total} answered ✓` : `${answeredCount} of ${total} answered`;
 el.textContent = flaggedCount ? `${base} · ${flaggedCount} flagged ⚑` : `${base}${ptsSuffix}`;
 el.classList.toggle("pen-readiness-all", answeredCount === total && !flaggedCount);
+});
+document.querySelectorAll("pen-submit .pen-self-summary").forEach((bar) => {
+if (graded || !selfChecks.size) {
+bar.hidden = true;
+return;
+}
+let ok = 0, part = 0, miss = 0;
+for (const v of selfChecks.values()) {
+if (v === "correct") ok++;
+else if (v === "partial") part++;
+else if (v === "incorrect") miss++;
+}
+const countsEl = bar.querySelector(".pen-self-summary-counts");
+if (countsEl) countsEl.textContent = `Self-check: ✓ ${ok} · ◐ ${part} · ✗ ${miss}`;
+const weakBtn = bar.querySelector(".pen-self-weak-btn");
+if (weakBtn) weakBtn.hidden = part + miss + flagged.size === 0;
+bar.hidden = false;
 });
 refreshTimerUI();
 }
@@ -5700,6 +5918,7 @@ h(
 { class: "pen-paper-row", role: "group", "aria-label": "Paper style" },
 h("button", { type: "button", class: "pen-paper-btn", "data-paper": "ruled", onclick: setPaper("ruled") }, word("paperRuled")),
 h("button", { type: "button", class: "pen-paper-btn", "data-paper": "grid", onclick: setPaper("grid") }, word("paperGrid")),
+h("button", { type: "button", class: "pen-paper-btn", "data-paper": "dots", onclick: setPaper("dots") }, word("paperDots")),
 h("button", { type: "button", class: "pen-paper-btn", "data-paper": "blank", onclick: setPaper("blank") }, word("paperBlank")),
 ),
 h(
@@ -5856,13 +6075,15 @@ refreshMeta() {
 if (!this.metaRow) return;
 const list = fieldSummaries();
 const totalPts = list.reduce((sum, f) => sum + (f.points ?? 0), 0);
-const sig = `${list.length}|${totalPts}|${timerCountdown}`;
+const examOn = isExamMode();
+const sig = `${list.length}|${totalPts}|${timerCountdown}|${examOn}`;
 if (this.lastMetaSig === sig) return;
 this.lastMetaSig = sig;
 const chips = [];
 if (list.length) chips.push(h("span", { class: "pen-meta-chip" }, `${list.length} question${list.length === 1 ? "" : "s"}`));
 if (totalPts > 0) chips.push(h("span", { class: "pen-meta-chip" }, `${totalPts} pts`));
 if (timerCountdown > 0) chips.push(h("span", { class: "pen-meta-chip" }, `⏱ ${Math.round(timerCountdown / 60)} min`));
+if (examOn) chips.push(h("span", { class: "pen-meta-chip pen-meta-exam" }, "🔒 Exam mode"));
 this.metaRow.replaceChildren(...chips);
 }
 }
@@ -5885,11 +6106,13 @@ paper: savedPaper ?? this.getAttribute("paper") ?? (figure ? "blank" : "ruled"),
 background: figure,
 strokes: before?.strokes,
 onActivate: (pad) => {
+noteFieldActivity(this.name);
 if (activePad === pad) return;
 activePad = pad;
 refreshTools();
 },
 onChange: () => {
+noteFieldActivity(this.name);
 const switched = activePad !== this.pad;
 activePad = this.pad;
 maybeAutoStartTimer();
@@ -5959,8 +6182,8 @@ this.expandBtn = h(
 {
 type: "button",
 class: "pen-pad-btn pen-expand-in",
-title: "Open task full screen",
-"aria-label": "Open task full screen",
+title: "Open this task in full screen",
+"aria-label": "Open this task in full screen",
 "aria-pressed": "false",
 onclick: (e) => {
 e.stopPropagation();
@@ -5969,7 +6192,7 @@ if (inPane) exitTaskPane();
 else enterTaskPane(this);
 },
 },
-"⛶",
+"⤢ Focus",
 );
 cornerTop.append(this.expandBtn);
 if (cornerTop.childElementCount) this.pad.el.append(cornerTop);
@@ -6023,11 +6246,38 @@ h("button", { type: "button", class: "pen-sheet-btn pen-say-btn", onclick: () =>
 )
 : null;
 const rubric = rubricOf(this);
+const tickedSet = this.name ? selfRubrics.get(this.name) : null;
 const rubricBar = rubric
 ? h(
 "div",
-{ class: "pen-rubric", "aria-label": word("rubricLabel") },
-...rubric.map((item) => h("span", { class: "pen-rubric-item" }, rich(item, "pen-inline"))),
+{ class: "pen-rubric", role: "group", "aria-label": word("rubricLabel") },
+...rubric.map((item, idx) =>
+h(
+"button",
+{
+type: "button",
+class: "pen-rubric-item pen-rubric-btn",
+"aria-pressed": String(Boolean(tickedSet?.has(idx + 1))),
+disabled: inputsLocked,
+title: "Tap to self-check this criterion before handing in",
+onclick: (e) => {
+if (inputsLocked || !this.name) return;
+let set = selfRubrics.get(this.name);
+if (!set) {
+set = new Set();
+selfRubrics.set(this.name, set);
+}
+const n = idx + 1;
+if (set.has(n)) set.delete(n);
+else set.add(n);
+if (!set.size) selfRubrics.delete(this.name);
+e.currentTarget.setAttribute("aria-pressed", String(set.has(n)));
+save();
+},
+},
+rich(item, "pen-inline"),
+),
+),
 )
 : null;
 const hintText = this.getAttribute("hint")?.trim();
@@ -6362,10 +6612,49 @@ if (picked?.length) gradeFiles(picked);
 e.target.value = "";
 },
 });
+const selfNotesBtn = h(
+"button",
+{
+type: "button",
+class: "pen-sheet-btn",
+onclick: async () => {
+try {
+await navigator.clipboard.writeText(buildStudyNotesMarkdown());
+selfNotesBtn.textContent = "✓ Notes copied!";
+} catch {
+downloadStudyNotes();
+}
+},
+},
+word("copyNotes"),
+);
+const selfWeakBtn = h(
+"button",
+{
+type: "button",
+class: "pen-sheet-btn pen-self-weak-btn",
+onclick: async () => {
+const prompt = buildFollowUpDrillPrompt();
+try {
+await navigator.clipboard.writeText(prompt);
+selfWeakBtn.textContent = "✓ Weak-spot prompt copied!";
+} catch {
+downloadTextFile(`${slugOfTitle()}-next-practice-prompt.txt`, prompt);
+}
+},
+},
+word("practiceWeak"),
+);
 this.replaceChildren(
 h(
 "div",
 { class: "pen-submit-shell" },
+h(
+"div",
+{ class: "pen-self-summary", hidden: true },
+h("span", { class: "pen-self-summary-counts" }),
+h("div", { class: "pen-self-summary-actions" }, selfNotesBtn, selfWeakBtn),
+),
 h(
 "div",
 { class: "pen-submit-primary" },
@@ -6460,6 +6749,20 @@ for (const [k, v] of Object.entries(saved.selfChecks)) {
 if (v === "correct" || v === "partial" || v === "incorrect") selfChecks.set(k, v);
 }
 }
+if (saved.selfRubrics && typeof saved.selfRubrics === "object") {
+for (const [k, arr] of Object.entries(saved.selfRubrics)) {
+if (Array.isArray(arr)) {
+const nums = arr.map(Number).filter((n) => Number.isInteger(n) && n >= 1);
+if (nums.length) selfRubrics.set(k, new Set(nums));
+}
+}
+}
+if (saved.fieldTimes && typeof saved.fieldTimes === "object") {
+for (const [k, v] of Object.entries(saved.fieldTimes)) {
+const n = Number(v);
+if (Number.isFinite(n) && n > 0) fieldTimes.set(k, n);
+}
+}
 if (saved.scratchpad && typeof saved.scratchpad === "object") scratchpadData = saved.scratchpad;
 if (Array.isArray(saved.followUps)) followUps = saved.followUps.filter((m) => m && typeof m.text === "string");
 if (typeof saved.studentName === "string") studentName = saved.studentName;
@@ -6481,6 +6784,14 @@ refreshTools();
 });
 window.addEventListener("popstate", () => {
 if (focusMode) exitTaskPane({ fromPopState: true });
+});
+document.addEventListener("dblclick", (e) => {
+const hEl = e.target?.closest?.("section > h2, section > h3, article > h2, article > h3");
+if (!hEl) return;
+const pen = hEl.parentElement?.querySelector?.("pen-input[name]");
+if (!pen) return;
+if (focusMode && focusGroups()[focusIndex]?.el === pen) exitTaskPane();
+else enterTaskPane(pen);
 });
 document.addEventListener("keydown", (e) => {
 if (e.key === "Escape") {

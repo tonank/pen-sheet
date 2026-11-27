@@ -101,6 +101,8 @@ export interface PenSheetAPI {
   followUpPrompt(): string;
   attempts(): AttemptRecord[];
   toggleFocus(on?: boolean): boolean;
+  enterTaskPane(targetOrIndex?: Element | string | number): boolean;
+  exitTaskPane(opts?: { fromPopState?: boolean }): boolean;
   openScratchpad(): void;
   openReference(): void;
   openManualReview(): void;
@@ -109,10 +111,10 @@ export interface PenSheetAPI {
   downloadBackup(): void;
   downloadBooxPdf(): Promise<Blob | null>;
   gradeFiles(files: FileList | File[]): Promise<GradeResult | null>;
-  exportForAI(): Promise<Array<{ q: { id: string; points: number; showPoints?: boolean; rubric?: string[] }; label: string; typed?: string; confidence?: "guess" | "unsure" | "sure"; inks: PenImage[] }> | null>;
+  exportForAI(): Promise<Array<{ q: { id: string; points: number; showPoints?: boolean; rubric?: string[] }; label: string; typed?: string; confidence?: "guess" | "unsure" | "sure"; selfRubric?: number[]; inks: PenImage[] }> | null>;
   openGraderSetup(): void;
   ask(prompt: string): Promise<string>;
-  fields(): Array<{ q: { id: string; points: number; showPoints?: boolean; rubric?: string[] }; label: string; typed?: string; confidence?: "guess" | "unsure" | "sure"; inks: PenImage[] }>;
+  fields(): Array<{ q: { id: string; points: number; showPoints?: boolean; rubric?: string[] }; label: string; typed?: string; confidence?: "guess" | "unsure" | "sure"; selfRubric?: number[]; inks: PenImage[] }>;
   InkPad: unknown;
   tools: { tool: string; color: string; size: number; fingers: string; scratchOut: boolean; penSeen: boolean };
 }

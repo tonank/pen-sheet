@@ -23,6 +23,12 @@
     .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; box-shadow: 0 1px 2px rgb(15 23 42 / 0.04); }
     .panel h2 { margin: 0 0 0.75rem; font-size: 1rem; }
     .meta-pill { font-size: 0.8rem; font-weight: 600; color: var(--muted); background: #f1f5f9; border: 1px solid var(--border); border-radius: 999px; padding: 0.16rem 0.6rem; }
+    .preflight-warn { font-size: 0.78rem; font-weight: 600; color: #b45309; background: #fffbeb; border: 1px solid #f59e0b; border-radius: 999px; padding: 0.14rem 0.58rem; }
+    .preflight-ok { font-size: 0.78rem; font-weight: 600; color: #15803d; background: #f0fdf4; border: 1px solid #22c55e; border-radius: 999px; padding: 0.14rem 0.58rem; }
+    .pedagogy-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
+    .pedagogy-row button { min-height: 30px; padding: 0 0.6rem; font-size: 0.8rem; }
+    .q-summary { font-size: 0.8rem; color: var(--muted); margin-top: -0.2rem; }
+    .q-body[hidden] { display: none !important; }
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
     @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
     label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.84rem; font-weight: 600; color: var(--fg); }
@@ -60,6 +66,7 @@
         <option value="calc">Calculus &amp; Physics Practice</option>
         <option value="german">German Dictation &amp; Writing</option>
       </select>
+      <button type="button" class="ghost" id="btn-reset" title="Reset Studio draft back to starter worksheet">↺ Reset</button>
       <button type="button" class="ghost" id="btn-import">📂 Import .html</button>
       <input type="file" id="file-import" accept=".html,text/html" hidden>
       <button type="button" class="ghost" id="btn-key">🗝 Answer Key (.md)</button>
@@ -99,19 +106,30 @@
       <label>Custom AI Coaching Instructions (optional)
         <input type="text" id="w-prompt" placeholder="e.g. Give a Socratic question first before revealing the worked solution.">
       </label>
-      <label style="margin-top:0.55rem">Formula / Reference Sheet (optional — accessible on every question via 📐 button, Markdown + $math$)
-        <textarea id="w-ref" placeholder="e.g. - **Chain rule:** $(f(g(x)))' = f'(g(x))g'(x)$&#10;- **Quadratic formula:** $x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$"></textarea>
-      </label>
+      <div class="grid2" style="margin-top:0.55rem">
+        <label>Reference Drawer Title (optional)
+          <input type="text" id="w-ref-title" value="Formula Sheet" placeholder="Formula Sheet, Vocabulary Bank…">
+        </label>
+        <label>Formula / Reference Sheet (Markdown + $math$)
+          <textarea id="w-ref" placeholder="e.g. - **Chain rule:** $(f(g(x)))' = f'(g(x))g'(x)$&#10;- **Quadratic formula:** $x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$"></textarea>
+        </label>
+      </div>
 
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.45rem;margin-top:1.1rem">
         <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">2. Questions</h2>
           <span class="meta-pill" id="q-stats"></span>
+          <span id="q-preflight" hidden></span>
         </div>
         <div style="display:flex;gap:0.4rem">
           <button type="button" class="ghost" id="btn-paste-toggle">📋 Paste Questions</button>
           <button type="button" id="btn-add">+ Add Question</button>
         </div>
+      </div>
+      <div class="pedagogy-row" aria-label="Add learning-science question formats">
+        <button type="button" class="ghost" data-starter="mistake">+ 🔍 Find the Mistake</button>
+        <button type="button" class="ghost" data-starter="worked">+ 🧩 Faded Worked Example</button>
+        <button type="button" class="ghost" data-starter="diagram">+ 📐 Draw on Diagram</button>
       </div>
       <div id="paste-box" hidden style="margin-top:0.65rem;padding:0.75rem;border:1px solid var(--border);border-radius:10px;background:#f8fafc">
         <label>Paste a numbered Markdown or plain-text quiz (supports <code>[4 pts]</code>, <code>Rubric:</code>, <code>Hint:</code>, <code>Solution:</code>, <code>Say:</code>)
@@ -133,6 +151,7 @@
           <button type="button" class="ghost vp-btn" data-vp="100%" aria-pressed="true">🖥 Desktop</button>
           <button type="button" class="ghost vp-btn" data-vp="768px" aria-pressed="false">📖 Tablet / Boox</button>
           <button type="button" class="ghost vp-btn" data-vp="390px" aria-pressed="false">📱 Phone</button>
+          <button type="button" class="ghost" id="btn-print-preview" title="Print crisp blank paper exam directly from Studio">🖨 Print Blank</button>
           <button type="button" class="ghost" id="btn-open-tab" title="Open full-screen preview in a new tab">↗ Open</button>
         </div>
       </div>
@@ -191,6 +210,60 @@
   <text x="360" y="36" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="bold">B</text>
 </svg>`,
       },
+      tree: {
+        name: "Binary / Recursion tree (7 nodes)",
+        svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 270">
+  <g stroke="#000" stroke-width="2" fill="#fff">
+    <line x1="280" y1="54" x2="150" y2="128"/><line x1="280" y1="54" x2="410" y2="128"/>
+    <line x1="150" y1="156" x2="80" y2="216"/><line x1="150" y1="156" x2="220" y2="216"/>
+    <line x1="410" y1="156" x2="340" y2="216"/><line x1="410" y1="156" x2="480" y2="216"/>
+    <circle cx="280" cy="40" r="24"/>
+    <circle cx="150" cy="142" r="24"/><circle cx="410" cy="142" r="24"/>
+    <circle cx="80" cy="230" r="24"/><circle cx="220" cy="230" r="24"/><circle cx="340" cy="230" r="24"/><circle cx="480" cy="230" r="24"/>
+  </g>
+</svg>`,
+      },
+      unitcircle: {
+        name: "Unit circle & quadrants",
+        svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 340">
+  <line x1="30" y1="170" x2="350" y2="170" stroke="#000" stroke-width="2"/>
+  <line x1="190" y1="20" x2="190" y2="320" stroke="#000" stroke-width="2"/>
+  <circle cx="190" cy="170" r="112" fill="none" stroke="#000" stroke-width="2.5"/>
+  <text x="314" y="162" font-family="sans-serif" font-size="16">1</text>
+  <text x="200" y="52" font-family="sans-serif" font-size="16">1</text>
+  <text x="58" y="162" font-family="sans-serif" font-size="16">-1</text>
+  <text x="198" y="302" font-family="sans-serif" font-size="16">-1</text>
+</svg>`,
+      },
+      timeline: {
+        name: "4-Stage process / timeline",
+        svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 160">
+  <g stroke="#000" stroke-width="2" fill="#fff">
+    <rect x="16" y="36" width="128" height="92" rx="8"/><rect x="176" y="36" width="128" height="92" rx="8"/>
+    <rect x="336" y="36" width="128" height="92" rx="8"/><rect x="496" y="36" width="128" height="92" rx="8"/>
+    <path d="M148 82 H170 M164 75 L171 82 L164 89 M308 82 H330 M324 75 L331 82 L324 89 M468 82 H490 M484 75 L491 82 L484 89" fill="none"/>
+  </g>
+  <text x="80" y="26" text-anchor="middle" font-family="sans-serif" font-size="16" font-weight="bold">1</text>
+  <text x="240" y="26" text-anchor="middle" font-family="sans-serif" font-size="16" font-weight="bold">2</text>
+  <text x="400" y="26" text-anchor="middle" font-family="sans-serif" font-size="16" font-weight="bold">3</text>
+  <text x="560" y="26" text-anchor="middle" font-family="sans-serif" font-size="16" font-weight="bold">4</text>
+</svg>`,
+      },
+      quadrant1: {
+        name: "First-quadrant graph / lab plot",
+        svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 310">
+  <g stroke="#cbd5e1" stroke-width="1">
+    <line x1="100" y1="30" x2="100" y2="260"/><line x1="150" y1="30" x2="150" y2="260"/><line x1="200" y1="30" x2="200" y2="260"/>
+    <line x1="250" y1="30" x2="250" y2="260"/><line x1="300" y1="30" x2="300" y2="260"/><line x1="350" y1="30" x2="350" y2="260"/><line x1="400" y1="30" x2="400" y2="260"/>
+    <line x1="50" y1="60" x2="420" y2="60"/><line x1="50" y1="110" x2="420" y2="110"/><line x1="50" y1="160" x2="420" y2="160"/><line x1="50" y1="210" x2="420" y2="210"/>
+  </g>
+  <line x1="50" y1="260" x2="426" y2="260" stroke="#000" stroke-width="2.5"/>
+  <line x1="50" y1="24" x2="50" y2="260" stroke="#000" stroke-width="2.5"/>
+  <text x="434" y="266" font-family="serif" font-size="18" font-style="italic">x</text>
+  <text x="44" y="18" font-family="serif" font-size="18" font-style="italic">y</text>
+  <text x="34" y="276" font-family="sans-serif" font-size="16">0</text>
+</svg>`,
+      },
     };
 
     let questions = [
@@ -238,13 +311,14 @@
       const exam = document.getElementById("w-exam").checked;
       const closedBook = document.getElementById("w-closedbook").checked;
       const customPrompt = document.getElementById("w-prompt").value.trim();
+      const refTitle = document.getElementById("w-ref-title").value.trim() || "Formula Sheet";
       const refSheet = document.getElementById("w-ref").value.trim();
 
       const cls = [eink ? "hwq-eink" : "", wide ? "pen-wide" : ""].filter(Boolean).join(" ");
       const htmlAttrs = [`lang="${escAttr(lang)}"`, fblang ? `data-feedback-lang="${escAttr(fblang)}"` : "", cls ? `class="${cls}"` : ""].filter(Boolean).join(" ");
       const toolbarTag = timer > 0 ? `<pen-toolbar timer="${timer}"></pen-toolbar>` : "<pen-toolbar></pen-toolbar>";
       const headerTag = `<pen-header${sub ? ` subtitle="${escAttr(sub)}"` : ""}${askName ? " student-name" : ""}></pen-header>`;
-      const refTag = refSheet ? `\n  <pen-reference title="Formula Sheet">${escHtml(refSheet)}</pen-reference>` : "";
+      const refTag = refSheet ? `\n  <pen-reference title="${escAttr(refTitle)}">${escHtml(refSheet)}</pen-reference>` : "";
       const submitAttrs = [mode !== "coach" ? `mode="${escAttr(mode)}"` : "", exam ? "exam" : "", aiHints && !exam ? "ai-hints" : "", customPrompt ? `prompt="${escAttr(customPrompt)}"` : ""].filter(Boolean).join(" ");
 
       const sections = questions.map((q, idx) => {
@@ -297,12 +371,31 @@ ${sections}
     const DRAFT_KEY = "pen-sheet:studio-draft:v1";
     function updateStats() {
       const el = document.getElementById("q-stats");
-      if (!el) return;
+      const pf = document.getElementById("q-preflight");
       const pts = questions.reduce((s, q) => s + (Number(q.points) || 0), 0);
       const timer = Number(document.getElementById("w-timer").value) || 0;
-      const parts = [`${questions.length} Q`, pts ? `${pts} pts` : ""];
-      if (timer > 0 && questions.length) parts.push(`~${Math.max(1, Math.round(timer / questions.length))}m/Q`);
-      el.textContent = parts.filter(Boolean).join(" · ");
+      const exam = document.getElementById("w-exam").checked;
+      const closedBook = document.getElementById("w-closedbook").checked;
+      const hasSolutions = questions.some((q) => q.solution && q.solution.trim());
+      const hasSpoilers = questions.some((q) => (q.solution && q.solution.trim()) || (q.hint && q.hint.trim()));
+      if (el) {
+        const parts = [`${questions.length} Q`, pts ? `${pts} pts` : ""];
+        if (timer > 0 && questions.length) parts.push(`~${Math.max(1, Math.round(timer / questions.length))}m/Q`);
+        el.textContent = parts.filter(Boolean).join(" · ");
+      }
+      if (pf) {
+        if ((exam || timer > 0) && !closedBook && hasSolutions) {
+          pf.hidden = false;
+          pf.className = "preflight-warn";
+          pf.textContent = "⚠ Solutions in student copy — check Closed-book export";
+        } else if (closedBook && hasSpoilers) {
+          pf.hidden = false;
+          pf.className = "preflight-ok";
+          pf.textContent = "✓ Closed-book safe (keys stripped)";
+        } else {
+          pf.hidden = true;
+        }
+      }
     }
     function saveDraft() {
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(currentSpec())); } catch {}
@@ -328,16 +421,20 @@ ${sections}
         const svgMode = hasCustomSvg ? "custom" : q.svg || "none";
         const card = document.createElement("div");
         card.className = "q-card";
+        const summaryBits = [q.points ? `${q.points} pts` : "", svgMode !== "none" ? `SVG: ${svgMode}` : q.paper, q.rubric ? "rubric ✓" : "", q.solution ? "key ✓" : ""].filter(Boolean).join(" · ");
         card.innerHTML = `
           <div class="q-head">
             <strong>Question ${idx + 1} (<code>q${idx + 1}</code>)</strong>
             <div class="q-btns">
+              <button type="button" class="ghost" data-act="fold" title="${q.collapsed ? "Expand" : "Collapse"}">${q.collapsed ? "▸" : "▾"}</button>
               <button type="button" class="ghost" data-act="dup" title="Duplicate question">⧉</button>
               <button type="button" class="ghost" data-act="up" title="Move up" ${idx === 0 ? "disabled" : ""}>↑</button>
               <button type="button" class="ghost" data-act="down" title="Move down" ${idx === questions.length - 1 ? "disabled" : ""}>↓</button>
               <button type="button" class="ghost" data-act="del" title="Remove question" ${questions.length <= 1 ? "disabled" : ""}>✕</button>
             </div>
           </div>
+          <div class="q-summary" ${q.collapsed ? "" : "hidden"}>${escHtml(q.heading || q.label || "Untitled")} ${summaryBits ? `— ${escHtml(summaryBits)}` : ""}</div>
+          <div class="q-body" ${q.collapsed ? "hidden" : ""} style="display:flex;flex-direction:column;gap:0.55rem">
           <div class="grid2">
             <label>Heading <input type="text" data-k="heading" value="${escAttr(q.heading)}"></label>
             <label>Short label <input type="text" data-k="label" value="${escAttr(q.label)}"></label>
@@ -347,6 +444,7 @@ ${sections}
             <label>Paper
               <select data-k="paper">
                 <option value="grid" ${q.paper === "grid" ? "selected" : ""}>Grid (math/tables)</option>
+                <option value="dots" ${q.paper === "dots" ? "selected" : ""}>Dot grid (math/notes/sketches)</option>
                 <option value="ruled" ${q.paper === "ruled" ? "selected" : ""}>Ruled (text/languages)</option>
                 <option value="blank" ${q.paper === "blank" ? "selected" : ""}>Blank (diagrams/proofs)</option>
               </select>
@@ -366,6 +464,7 @@ ${sections}
             <label>Solution / Answer Key (for self-check or Teacher Key) <input type="text" data-k="solution" value="${escAttr(q.solution)}" placeholder="Stripped when Closed-book is checked"></label>
           </div>
           <label>Audio Dictation phrase (optional — adds 🔊 Listen button without showing text) <input type="text" data-k="say" value="${escAttr(q.say || "")}" placeholder="e.g. Gestern bin ich in den Park gegangen."></label>
+          </div>
         `;
         const customRow = card.querySelector(".custom-svg-row");
         card.querySelectorAll("[data-k]").forEach((el) => {
@@ -386,7 +485,8 @@ ${sections}
         card.querySelectorAll("[data-act]").forEach((btn) => {
           btn.addEventListener("click", () => {
             const act = btn.dataset.act;
-            if (act === "dup") questions.splice(idx + 1, 0, { ...questions[idx], heading: `${idx + 2}. ${String(questions[idx].heading || "").replace(/^\d+\.\s*/, "")}` });
+            if (act === "fold") { questions[idx].collapsed = !questions[idx].collapsed; renderQuestions(); return; }
+            if (act === "dup") questions.splice(idx + 1, 0, { ...questions[idx], collapsed: false, heading: `${idx + 2}. ${String(questions[idx].heading || "").replace(/^\d+\.\s*/, "")}` });
             if (act === "up" && idx > 0) [questions[idx - 1], questions[idx]] = [questions[idx], questions[idx - 1]];
             if (act === "down" && idx < questions.length - 1) [questions[idx + 1], questions[idx]] = [questions[idx], questions[idx + 1]];
             if (act === "del" && questions.length > 1) questions.splice(idx, 1);
@@ -404,7 +504,7 @@ ${sections}
       setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 3000);
     };
 
-    document.querySelectorAll("#w-title,#w-sub,#w-timer,#w-mode,#w-lang,#w-fblang,#w-eink,#w-wide,#w-name,#w-conf,#w-aihints,#w-exam,#w-closedbook,#w-prompt,#w-ref").forEach((el) => {
+    document.querySelectorAll("#w-title,#w-sub,#w-timer,#w-mode,#w-lang,#w-fblang,#w-eink,#w-wide,#w-name,#w-conf,#w-aihints,#w-exam,#w-closedbook,#w-prompt,#w-ref-title,#w-ref").forEach((el) => {
       el.addEventListener("input", schedulePreview);
       el.addEventListener("change", schedulePreview);
     });
@@ -436,7 +536,7 @@ ${sections}
             else if (key === "hint") hint = val;
             else if (key === "solution" || key === "answer") solution = val;
             else if (key === "say" || key === "dictation") say = val;
-            else if (key === "paper" && /^(grid|ruled|blank)$/i.test(val)) paper = val.toLowerCase();
+            else if (key === "paper" && /^(grid|dots|ruled|blank)$/i.test(val)) paper = val.toLowerCase();
           } else {
             promptLines.push(line);
           }
@@ -555,6 +655,54 @@ ${sections}
       renderQuestions();
       schedulePreview();
     };
+    const PEDAGOGY_STARTERS = {
+      mistake: (n) => ({
+        heading: `${n}. Find & fix the mistake`,
+        prompt: "A classmate wrote: [paste flawed 3-line solution here].\nCircle the exact wrong step, explain WHY it fails, and write the corrected solution.",
+        label: "Find the mistake",
+        paper: "dots",
+        height: 400,
+        points: 4,
+        rubric: "Identify the wrong step | Explain why the misconception fails | Show the corrected derivation",
+        hint: "Test the classmate's step with a tiny concrete number.",
+        solution: "",
+        svg: "none",
+      }),
+      worked: (n) => ({
+        heading: `${n}. Complete the faded worked example`,
+        prompt: "Step 1: [given setup]\nStep 2: [given intermediate step]\nStep 3 (your turn): finish the derivation and justify why Step 2 works.",
+        label: "Faded worked example",
+        paper: "grid",
+        height: 360,
+        points: 3,
+        rubric: "Justify Step 2 clearly | Complete Step 3 accurately | Check final answer",
+        hint: "Look closely at what changed between Step 1 and Step 2.",
+        solution: "",
+        svg: "none",
+      }),
+      diagram: (n) => ({
+        heading: `${n}. Trace & label the diagram`,
+        prompt: "Fill every node/region directly on the figure and write a one-line conclusion underneath.",
+        label: "Diagram trace",
+        paper: "blank",
+        height: 380,
+        points: 4,
+        rubric: "Accurate labels on diagram | Show key relationship/arrows | Clear conclusion",
+        hint: "",
+        solution: "",
+        svg: "tree",
+      }),
+    };
+    document.querySelectorAll("[data-starter]").forEach((btn) => {
+      btn.onclick = () => {
+        const make = PEDAGOGY_STARTERS[btn.dataset.starter];
+        if (!make) return;
+        questions.push(make(questions.length + 1));
+        renderQuestions();
+        schedulePreview();
+        showToast(`✓ Added "${btn.textContent.replace(/^\+\s*/, "")}" question`);
+      };
+    });
     const CDN = "https://cdn.jsdelivr.net/gh/tonank/pen-sheet@main/dist/pen-sheet.js";
     function currentSpec() {
       const closedBook = document.getElementById("w-closedbook").checked;
@@ -572,8 +720,9 @@ ${sections}
         aiHints: document.getElementById("w-aihints").checked,
         exam: document.getElementById("w-exam").checked,
         prompt: document.getElementById("w-prompt").value.trim(),
+        refTitle: document.getElementById("w-ref-title").value.trim() || "Formula Sheet",
         ref: document.getElementById("w-ref").value.trim(),
-        questions: questions.map((q) => ({ ...q, ...(closedBook ? { hint: "", solution: "" } : {}) })),
+        questions: questions.map(({ collapsed, ...q }) => ({ ...q, ...(closedBook ? { hint: "", solution: "" } : {}) })),
       };
     }
     function toBase64Url(bytes) {
@@ -623,6 +772,7 @@ ${sections}
       document.getElementById("w-aihints").checked = Boolean(sub?.hasAttribute("ai-hints"));
       document.getElementById("w-exam").checked = Boolean(sub?.hasAttribute("exam") || tb?.hasAttribute("exam"));
       const refEl = doc.querySelector("pen-reference");
+      document.getElementById("w-ref-title").value = refEl?.getAttribute("title") || "Formula Sheet";
       document.getElementById("w-ref").value = refEl?.textContent?.trim() || "";
       const pens = [...doc.querySelectorAll("pen-input")];
       if (pens.length) {
@@ -676,6 +826,18 @@ ${sections}
         document.getElementById("preview").style.width = btn.dataset.vp;
       };
     });
+    document.getElementById("btn-print-preview").onclick = () => {
+      try {
+        document.getElementById("preview").contentWindow.print();
+      } catch {
+        showToast("⚠ Click ↗ Open to print from a standalone tab");
+      }
+    };
+    document.getElementById("btn-reset").onclick = () => {
+      if (!confirm("Reset Studio draft to the default template?")) return;
+      try { localStorage.removeItem(DRAFT_KEY); } catch {}
+      location.reload();
+    };
     document.getElementById("btn-open-tab").onclick = async () => {
       const hash = await encodeShareHash(currentSpec());
       window.open(new URL(`./play.html${hash}`, location.href).href, "_blank", "noopener");
@@ -696,6 +858,7 @@ ${sections}
         document.getElementById("w-aihints").checked = Boolean(saved.aiHints);
         document.getElementById("w-exam").checked = Boolean(saved.exam);
         document.getElementById("w-prompt").value = saved.prompt || "";
+        document.getElementById("w-ref-title").value = saved.refTitle || "Formula Sheet";
         document.getElementById("w-ref").value = saved.ref || "";
         questions = saved.questions;
       }
